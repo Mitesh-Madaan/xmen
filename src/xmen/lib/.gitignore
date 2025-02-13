@@ -1,0 +1,6 @@
+
+# Ignore all file in this directory
+vendor/
+
+# Compiled protobuf files
+*.pb.go
