@@ -1,6 +1,5 @@
 syntax="proto2";
 package models;
-option go_package = "../lib/pb";
 
 message Person {
     optional string name = 3;

@@ -68,7 +68,7 @@ func (d *Directory) Add(id, kind string, msg proto.Message) error {
 func (d *Directory) Update(id, kind string, msg proto.Message) error {
 	for i, record := range d.Records {
 		if record.Id == id && record.Kind == kind {
-			d.Records[i] = NewRecord(id, kind, msg)
+			d.Records[i].Msg = msg
 			return nil
 		}
 	}
