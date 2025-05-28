@@ -18,7 +18,7 @@ type Animal struct {
 }
 
 func NewAnimal(b *xBase.Base) IBase {
-	// Create a new person
+	// Create a new animal
 	return &Animal{base: b}
 }
 
@@ -50,7 +50,7 @@ func (a *Animal) Clone() IBase {
 }
 
 func (a *Animal) Edit(config map[string]interface{}) error {
-	// Edit the person
+	// Edit the animal
 	// editableFields := a.base.GetEditableFields()
 	editMap := make(map[string]interface{})
 
@@ -78,7 +78,7 @@ func (a *Animal) PreviewValidate() bool {
 }
 
 func (a *Animal) Save() error {
-	// Save the person
+	// Save the animal
 	check := a.PreviewValidate()
 	if !check {
 		err := errors.New(a.base.GetMessages())
@@ -102,22 +102,22 @@ func (a *Animal) Save() error {
 }
 
 func (a *Animal) Fill(msg proto.Message) error {
-	// Fill the person
+	// Fill the animal
 	return a.FromProto(msg.(*xPb.Animal))
 }
 
 func (a *Animal) ToString() string {
-	// Convert the person to a string
+	// Convert the animal to a string
 	return fmt.Sprintf("Animal: %s\n", a.base.ToString())
 }
 
 func (a *Animal) ToStatus() map[string]interface{} {
-	// Convert the person to a status
+	// Convert the animal to a status
 	return a.base.ToStatus()
 }
 
 func (a *Animal) ToProto() *xPb.Animal {
-	// Convert the person to a proto
+	// Convert the animal to a proto
 	msg := &xPb.Animal{}
 	dbIdentity := a.base.GetDBIdentifier()
 	id := dbIdentity["id"]
@@ -140,7 +140,7 @@ func (a *Animal) ToProto() *xPb.Animal {
 }
 
 func (a *Animal) FromProto(msg *xPb.Animal) error {
-	// Convert the person from a proto
+	// Convert the animal from a proto
 	id, err := uuid.Parse(msg.GetId())
 	if err != nil {
 		return err

@@ -9,4 +9,6 @@ require (
 
 require github.com/google/uuid v1.6.0
 
+require github.com/golang/protobuf v1.5.0 // indirect
+
 replace lib => ../../lib
