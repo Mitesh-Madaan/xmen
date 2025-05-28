@@ -53,12 +53,15 @@ func SeedDirectory() error {
 
 func StoreDirectory() error {
 	// Store the directory
-	var err error
+	// var err error
 	directory = dbchef.GetDirectory()
 
 	var storeRecords []*base.Base
 	for _, record := range directory.Records {
-		obj := xModels.GetBaseFromProto(record.Msg, record.Kind)
+		obj, err := xModels.GetObjectFromDB(record.Id, record.Kind)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+		}
 		fmt.Printf("Store Record: %s\n", obj.ToString())
 		storeRecords = append(storeRecords, obj.GetBase())
 	}
@@ -80,7 +83,7 @@ func PrintDirectory() error {
 	// Print the directory
 	directory = dbchef.GetDirectory()
 	for _, record := range directory.Records {
-		fmt.Printf("Record: %v\n", record)
+		fmt.Printf("Record ID: %s, Kind: %s, details: %v\n", record.Id, record.Kind, record.ObjDetails)
 	}
 	return nil
 }

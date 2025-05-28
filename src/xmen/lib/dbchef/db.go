@@ -2,8 +2,6 @@ package dbchef
 
 import (
 	"errors"
-
-	"google.golang.org/protobuf/proto"
 )
 
 var db *Directory
@@ -12,15 +10,10 @@ type Directory struct {
 	Records []Record
 }
 
-type Entity[Proto proto.Message] interface {
-	ToProto() Proto
-	FromProto(p Proto) error
-}
-
 type Record struct {
-	Id   string
-	Kind string
-	Msg  proto.Message
+	Id         string
+	Kind       string
+	ObjDetails []byte
 }
 
 func GetDirectory() *Directory {
@@ -39,43 +32,43 @@ func createDirectory() *Directory {
 	return &directory
 }
 
-func NewRecord(id, kind string, msg proto.Message) Record {
+func NewRecord(id, kind string, details []byte) Record {
 	// Create a new record
 	return Record{
-		Id:   id,
-		Kind: kind,
-		Msg:  msg,
+		Id:         id,
+		Kind:       kind,
+		ObjDetails: details,
 	}
 }
 
-// Get retrieves a proto.Message by its ID and kind from the Directory.
-func (d *Directory) Get(id, kind string) (proto.Message, error) {
+// Get retrieves an object by its ID and kind from the Directory.
+func (d *Directory) Get(id, kind string) ([]byte, error) {
 	for _, record := range d.Records {
 		if record.Id == id && record.Kind == kind {
-			return record.Msg, nil
+			return record.ObjDetails, nil
 		}
 	}
 	return nil, errors.New("record not found")
 }
 
-// Add adds a new proto.Message to the Directory.
-func (d *Directory) Add(id, kind string, msg proto.Message) error {
-	d.Records = append(d.Records, NewRecord(id, kind, msg))
+// Add adds a new object to the Directory.
+func (d *Directory) Add(id, kind string, details []byte) error {
+	d.Records = append(d.Records, NewRecord(id, kind, details))
 	return nil
 }
 
-// Update updates an existing proto.Message in the Directory.
-func (d *Directory) Update(id, kind string, msg proto.Message) error {
+// Update updates an existing object in the Directory.
+func (d *Directory) Update(id, kind string, details []byte) error {
 	for i, record := range d.Records {
 		if record.Id == id && record.Kind == kind {
-			d.Records[i].Msg = msg
+			d.Records[i].ObjDetails = details
 			return nil
 		}
 	}
 	return errors.New("record not found")
 }
 
-// Delete removes a proto.Message from the Directory by its ID and kind.
+// Delete removes an object from the Directory by its ID and kind.
 func (d *Directory) Delete(id, kind string) error {
 	for i, record := range d.Records {
 		if record.Id == id && record.Kind == kind {

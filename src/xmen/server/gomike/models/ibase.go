@@ -4,15 +4,13 @@ import (
 	"fmt"
 	xBase "lib/base"
 	xDb "lib/dbchef"
-
-	"google.golang.org/protobuf/proto"
 )
 
 type IBase interface {
 	ToString() string
 	PreviewValidate() bool
 	Save() error
-	Fill(msg proto.Message) error
+	Fill([]byte) error
 	Edit(map[string]interface{}) error
 	ToStatus() map[string]interface{}
 	Delete() error
@@ -32,16 +30,6 @@ func GetBase(b *xBase.Base) IBase {
 	return BaseMapper[b.Kind](b)
 }
 
-func GetBaseFromProto(msg proto.Message, kind string) IBase {
-	// Get the base from proto
-	b := &xBase.Base{
-		Kind: kind,
-	}
-	obj := GetBase(b)
-	obj.Fill(msg)
-	return obj
-}
-
 func GetObjectFromDB(id, kind string) (IBase, error) {
 	// Get the object from the DB
 	directory := xDb.GetDirectory()
@@ -49,10 +37,19 @@ func GetObjectFromDB(id, kind string) (IBase, error) {
 		return nil, fmt.Errorf("Directory not found")
 	}
 
-	msg, err := directory.Get(id, kind)
+	details, err := directory.Get(id, kind)
 	if err != nil {
 		return nil, err
 	}
 
-	return GetBaseFromProto(msg, kind), nil
+	b := &xBase.Base{
+		Kind: kind,
+	}
+	obj := GetBase(b)
+	err = obj.Fill(details)
+	if err != nil {
+		fmt.Printf("Error filling base from details: %v\n", err)
+		return nil, err
+	}
+	return obj, nil
 }

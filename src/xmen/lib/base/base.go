@@ -1,6 +1,7 @@
 package base
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -9,7 +10,7 @@ import (
 )
 
 type Base struct {
-	Name          string          `json:"name"`
+	Name          string          `json:"name,omitempty"`
 	ID            uuid.UUID       `json:"id"`
 	Kind          string          `json:"kind"`
 	Age           int             `json:"age,omitempty"`
@@ -64,6 +65,16 @@ func (b *Base) ToStatus() map[string]interface{} {
 			"message_list":    xMsg.DumpMessages(b.MessageList),
 		},
 	}
+}
+
+func (b *Base) ToJson() ([]byte, error) {
+	// Convert the base to JSON
+	jsonData, err := json.Marshal(b)
+	if err != nil {
+		fmt.Printf("Error converting to JSON: %v\n", err)
+		return nil, err
+	}
+	return jsonData, nil
 }
 
 func (b *Base) GetDBIdentifier() map[string]string {

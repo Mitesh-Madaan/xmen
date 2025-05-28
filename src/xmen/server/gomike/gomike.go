@@ -33,13 +33,13 @@ func run() {
 		panic(err)
 	}
 
-	// if err = SeedDirectory(); err != nil {
-	// 	panic(err)
-	// }
+	if err = SeedDirectory(); err != nil {
+		panic(err)
+	}
 
-	// if err = PrintDirectory(); err != nil {
-	// 	panic(err)
-	// }
+	if err = PrintDirectory(); err != nil {
+		panic(err)
+	}
 
 	mux := http.NewServeMux()
 

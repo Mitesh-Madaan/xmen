@@ -1,17 +1,12 @@
 package models
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	xError "gomike/error"
-
-	"github.com/google/uuid"
-
 	xBase "lib/base"
 	xDb "lib/dbchef"
-	xPb "lib/pb"
-
-	"google.golang.org/protobuf/proto"
 )
 
 type Person struct {
@@ -89,17 +84,23 @@ func (p *Person) Save() error {
 
 	dbIdentity := p.base.GetDBIdentifier()
 	_, err := directory.Get(dbIdentity["id"], dbIdentity["kind"])
+	details := p.ToJson()
+	if details == nil {
+		err := errors.New("failed to convert person to JSON")
+		return xError.NewValidationError(err)
+	}
+	// fmt.Printf("details of person: %v\n", details)
 	if err != nil && err.Error() == "record not found" {
-		directory.Add(dbIdentity["id"], dbIdentity["kind"], p.ToProto())
+		directory.Add(dbIdentity["id"], dbIdentity["kind"], details)
 	} else {
-		directory.Update(dbIdentity["id"], dbIdentity["kind"], p.ToProto())
+		directory.Update(dbIdentity["id"], dbIdentity["kind"], details)
 	}
 	return nil
 }
 
-func (p *Person) Fill(msg proto.Message) error {
+func (p *Person) Fill(details []byte) error {
 	// Fill the person
-	return p.FromProto(msg.(*xPb.Person))
+	return p.FromJson(details)
 }
 
 func (p *Person) ToString() string {
@@ -112,48 +113,24 @@ func (p *Person) ToStatus() map[string]interface{} {
 	return p.base.ToStatus()
 }
 
-func (p *Person) ToProto() *xPb.Person {
-	// Convert the person to a proto
-	msg := &xPb.Person{}
-	dbIdentity := p.base.GetDBIdentifier()
-	id := dbIdentity["id"]
-	msg.Id = &id
-	kind := dbIdentity["kind"]
-	msg.Kind = &kind
-	name := p.base.Name
-	msg.Name = &name
-	age := int64(p.base.Age)
-	msg.Age = &age
-	deleted := p.base.Deleted
-	msg.Deleted = &deleted
-	description := p.base.Description
-	msg.Description = &description
-	cloned := p.base.Cloned
-	msg.Cloned = &cloned
-	clonedFromRef := p.base.ClonedFromRef.String()
-	msg.ClonedFromRef = &clonedFromRef
-	return msg
+func (p *Person) FromJson(details []byte) error {
+	// Fill the person from JSON
+	err := json.Unmarshal(details, &p.base)
+	if err != nil {
+		fmt.Printf("Error unmarshalling JSON: %v\n", err)
+		return err
+	}
+	return nil
 }
 
-func (p *Person) FromProto(msg *xPb.Person) error {
-	// Convert the person from a proto
-	id, err := uuid.Parse(msg.GetId())
+func (p *Person) ToJson() []byte {
+	// Convert the person to JSON
+	details, err := p.base.ToJson()
 	if err != nil {
-		return err
+		fmt.Printf("Error converting to JSON: %v\n", err)
+		return nil
 	}
-	p.base.Name = msg.GetName()
-	p.base.ID = id
-	p.base.Kind = msg.GetKind()
-	p.base.Age = int(msg.GetAge())
-	p.base.Deleted = msg.GetDeleted()
-	p.base.Description = msg.GetDescription()
-	p.base.Cloned = msg.GetCloned()
-	clonedFromRef, err := uuid.Parse(msg.GetClonedFromRef())
-	if err != nil {
-		return err
-	}
-	p.base.ClonedFromRef = clonedFromRef
-	return nil
+	return details
 }
 
 func (p *Person) GetBase() *xBase.Base {

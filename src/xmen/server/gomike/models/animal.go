@@ -1,16 +1,12 @@
 package models
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	xError "gomike/error"
-
 	xBase "lib/base"
 	xDb "lib/dbchef"
-	xPb "lib/pb"
-
-	"github.com/google/uuid"
-	"google.golang.org/protobuf/proto"
 )
 
 type Animal struct {
@@ -94,16 +90,16 @@ func (a *Animal) Save() error {
 	dbIdentity := a.base.GetDBIdentifier()
 	_, err := directory.Get(dbIdentity["id"], dbIdentity["kind"])
 	if err != nil && err.Error() == "record not found" {
-		directory.Add(dbIdentity["id"], dbIdentity["kind"], a.ToProto())
+		directory.Add(dbIdentity["id"], dbIdentity["kind"], a.ToJson())
 	} else {
-		directory.Update(dbIdentity["id"], dbIdentity["kind"], a.ToProto())
+		directory.Update(dbIdentity["id"], dbIdentity["kind"], a.ToJson())
 	}
 	return nil
 }
 
-func (a *Animal) Fill(msg proto.Message) error {
+func (a *Animal) Fill(details []byte) error {
 	// Fill the animal
-	return a.FromProto(msg.(*xPb.Animal))
+	return a.FromJson(details)
 }
 
 func (a *Animal) ToString() string {
@@ -116,46 +112,22 @@ func (a *Animal) ToStatus() map[string]interface{} {
 	return a.base.ToStatus()
 }
 
-func (a *Animal) ToProto() *xPb.Animal {
-	// Convert the animal to a proto
-	msg := &xPb.Animal{}
-	dbIdentity := a.base.GetDBIdentifier()
-	id := dbIdentity["id"]
-	msg.Id = &id
-	kind := dbIdentity["kind"]
-	msg.Kind = &kind
-	name := a.base.Name
-	msg.Name = &name
-	age := int64(a.base.Age)
-	msg.Age = &age
-	deleted := a.base.Deleted
-	msg.Deleted = &deleted
-	description := a.base.Description
-	msg.Description = &description
-	cloned := a.base.Cloned
-	msg.Cloned = &cloned
-	clonedFromRef := a.base.ClonedFromRef.String()
-	msg.ClonedFromRef = &clonedFromRef
-	return msg
+func (a *Animal) FromJson(details []byte) error {
+	// Convert the details to an Animal
+	err := json.Unmarshal(details, &a.base)
+	if err != nil {
+		fmt.Printf("failed to unmarshal details: %v", err)
+		return err
+	}
+	return nil
 }
 
-func (a *Animal) FromProto(msg *xPb.Animal) error {
-	// Convert the animal from a proto
-	id, err := uuid.Parse(msg.GetId())
+func (a *Animal) ToJson() []byte {
+	// Convert the animal to JSON
+	details, err := a.base.ToJson()
 	if err != nil {
-		return err
+		fmt.Printf("Error converting to JSON: %v\n", err)
+		return nil
 	}
-	a.base.ID = id
-	a.base.Kind = msg.GetKind()
-	a.base.Name = msg.GetName()
-	a.base.Age = int(msg.GetAge())
-	a.base.Deleted = msg.GetDeleted()
-	a.base.Description = msg.GetDescription()
-	a.base.Cloned = msg.GetCloned()
-	clonedFromRef, err := uuid.Parse(msg.GetClonedFromRef())
-	if err != nil {
-		return err
-	}
-	a.base.ClonedFromRef = clonedFromRef
-	return nil
+	return details
 }
