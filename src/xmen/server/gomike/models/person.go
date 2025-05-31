@@ -1,139 +1,165 @@
 package models
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
+	"strings"
+
+	"github.com/google/uuid"
+
 	xError "gomike/error"
 	xBase "lib/base"
 	xDb "lib/dbchef"
 )
 
 type Person struct {
-	base *xBase.Base
+	Name          string
+	ID            uint
+	Kind          string
+	Age           uint8
+	Deleted       bool
+	Description   string
+	Nationality   string
+	Cloned        bool
+	ClonedFromRef uint
 }
 
-func NewPerson(b *xBase.Base) IBase {
-	// Create a new person
-	return &Person{base: b}
+func (p *Person) GetEditableFields() []string {
+	// Get the editable fields
+	return []string{"name", "description", "age", "Nationality"}
+}
+
+func (p *Person) PostEditables(editMap map[string]interface{}) {
+	// Post the editable fields
+	for key, value := range editMap {
+		switch key {
+		case "name":
+			p.Name = value.(string)
+		case "description":
+			p.Description = value.(string)
+		case "age":
+			p.Age = value.(uint8)
+		case "Nationality":
+			p.Nationality = value.(string)
+		}
+	}
+}
+
+func (p *Person) Clone() xBase.Base {
+	// Clone the Person
+	randomUUID := uuid.New().ID()
+	newPerson := &Person{
+		Name:          p.Name,
+		ID:            uint(randomUUID),
+		Kind:          p.Kind,
+		Age:           p.Age,
+		Deleted:       false,
+		Description:   p.Description,
+		Nationality:   p.Nationality,
+		Cloned:        true,
+		ClonedFromRef: p.ID,
+	}
+	return newPerson
+}
+
+func (p *Person) Create(objMap map[string]interface{}) error {
+	// Set default values
+	p.ID = uint(uuid.New().ID())
+	p.Kind = "person"
+	p.Deleted = false
+	p.Cloned = false
+	p.ClonedFromRef = 0
+
+	for key, value := range objMap {
+		editableFields := p.GetEditableFields()
+		if contains(editableFields, strings.ToLower(key)) {
+			field := reflect.ValueOf(p).Elem().FieldByNameFunc(func(fieldName string) bool {
+				return strings.EqualFold(fieldName, key)
+			})
+			if field.IsValid() && field.CanSet() {
+				field.Set(reflect.ValueOf(value))
+			}
+		}
+	}
+
+	return nil
+}
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if strings.EqualFold(s, item) {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *Person) Update(objMap map[string]interface{}) error {
+	// Update the person
+	for key, value := range objMap {
+		editableFields := p.GetEditableFields()
+		if contains(editableFields, strings.ToLower(key)) {
+			field := reflect.ValueOf(p).Elem().FieldByNameFunc(func(fieldName string) bool {
+				return strings.EqualFold(fieldName, key)
+			})
+			if field.IsValid() && field.CanSet() {
+				field.Set(reflect.ValueOf(value))
+			}
+		}
+	}
+	return nil
 }
 
 func (p *Person) Delete() error {
-	directory := xDb.GetDirectory()
-	if directory == nil {
-		err := errors.New("directory not found")
-		return xError.NewObjectNotFoundError(err)
-	}
-
-	p.base.MarkDeleted()
+	p.Deleted = true
 	err := p.Save()
 	if err != nil {
 		return err
 	}
 	return nil
-}
-
-func (p *Person) Clone() IBase {
-	// Clone the Person
-	b := p.base.Clone()
-	clone := NewPerson(b)
-	return clone
-}
-
-func (p *Person) Edit(config map[string]interface{}) error {
-	// Edit the person
-	// editableFields := p.base.GetEditableFields()
-	editMap := make(map[string]interface{})
-
-	for key, value := range config {
-		// if !xBase.Contains(editableFields, key) {
-		// 	return xError.NewValidationError("invalid field")
-		// }
-		editMap[key] = value
-	}
-
-	p.base.PostEditables(editMap)
-	err := p.Save()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (p *Person) PreviewValidate() bool {
-	// Validate the
-	if p.base == nil {
-		return false
-	}
-	return p.base.PreviewValidate()
 }
 
 func (p *Person) Save() error {
 	// Save the person
-	check := p.PreviewValidate()
-	if !check {
-		err := errors.New(p.base.GetMessages())
-		return xError.NewValidationError(err)
-	}
-
 	directory := xDb.GetDirectory()
 	if directory == nil {
 		err := errors.New("directory not found")
 		return xError.NewObjectNotFoundError(err)
 	}
 
-	dbIdentity := p.base.GetDBIdentifier()
-	_, err := directory.Get(dbIdentity["id"], dbIdentity["kind"])
-	details := p.ToJson()
-	if details == nil {
-		err := errors.New("failed to convert person to JSON")
-		return xError.NewValidationError(err)
-	}
-	// fmt.Printf("details of person: %v\n", details)
-	if err != nil && err.Error() == "record not found" {
-		directory.Add(dbIdentity["id"], dbIdentity["kind"], details)
-	} else {
-		directory.Update(dbIdentity["id"], dbIdentity["kind"], details)
-	}
+	// db add/update operations
 	return nil
-}
-
-func (p *Person) Fill(details []byte) error {
-	// Fill the person
-	return p.FromJson(details)
 }
 
 func (p *Person) ToString() string {
-	// Convert the person to a string
-	return fmt.Sprintf("Person: %s\n", p.base.ToString())
+	// Convert the base to a string
+	data := ""
+	data += fmt.Sprintf("Name: %s ", p.Name)
+	data += fmt.Sprintf("ID: %d ", p.ID)
+	data += fmt.Sprintf("Kind: %s ", p.Kind)
+	data += fmt.Sprintf("Age: %d ", p.Age)
+	data += fmt.Sprintf("Deleted: %t ", p.Deleted)
+	data += fmt.Sprintf("Description: %s ", p.Description)
+	data += fmt.Sprintf("Nationality: %s", p.Nationality)
+	data += fmt.Sprintf("Cloned: %t ", p.Cloned)
+	data += fmt.Sprintf("Cloned From Ref: %d ", p.ClonedFromRef)
+	return data
 }
 
 func (p *Person) ToStatus() map[string]interface{} {
-	// Convert the person to a status
-	return p.base.ToStatus()
-}
-
-func (p *Person) FromJson(details []byte) error {
-	// Fill the person from JSON
-	err := json.Unmarshal(details, &p.base)
-	if err != nil {
-		fmt.Printf("Error unmarshalling JSON: %v\n", err)
-		return err
+	// Convert the base to a status
+	return map[string]interface{}{
+		"id":   p.ID,
+		"kind": p.Kind,
+		"data": map[string]interface{}{
+			"name":            p.Name,
+			"age":             p.Age,
+			"deleted":         p.Deleted,
+			"description":     p.Description,
+			"Nationality":     p.Nationality,
+			"cloned":          p.Cloned,
+			"cloned_from_ref": p.ClonedFromRef,
+		},
 	}
-	return nil
-}
-
-func (p *Person) ToJson() []byte {
-	// Convert the person to JSON
-	details, err := p.base.ToJson()
-	if err != nil {
-		fmt.Printf("Error converting to JSON: %v\n", err)
-		return nil
-	}
-	return details
-}
-
-func (p *Person) GetBase() *xBase.Base {
-	// Get the base
-	return p.base
 }
