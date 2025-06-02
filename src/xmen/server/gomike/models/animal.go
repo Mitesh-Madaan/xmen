@@ -14,36 +14,22 @@ import (
 )
 
 type Animal struct {
-	Name          string
-	ID            uint
-	Kind          string
-	Age           uint8
-	Deleted       bool
-	Description   string
-	Breed         string
-	Cloned        bool
-	ClonedFromRef uint
+	ID            uint   `gorm:"column:id;primaryKey;autoIncrement"`
+	Name          string `gorm:"column:name;type:varchar(255);not null"`
+	Kind          string `gorm:"column:kind;type:varchar(100);not null"`
+	Age           uint8  `gorm:"column:age;type:tinyint;not null"`
+	Description   string `gorm:"column:description;type:text"`
+	Breed         string `gorm:"column:breed;type:varchar(255)"`
+	Deleted       bool   `gorm:"column:deleted;type:boolean;default:false"`
+	Cloned        bool   `gorm:"column:cloned;type:boolean;default:false"`
+	ClonedFromRef uint   `gorm:"column:cloned_from_ref;type:bigint;default:0"`
 }
 
-func (a *Animal) GetEditableFields() []string {
-	// Get the editable fields
-	return []string{"name", "description", "age", "Breed"}
-}
-
-func (a *Animal) PostEditables(editMap map[string]interface{}) {
-	// Post the editable fields
-	for key, value := range editMap {
-		switch key {
-		case "name":
-			a.Name = value.(string)
-		case "description":
-			a.Description = value.(string)
-		case "age":
-			a.Age = value.(uint8)
-		case "Breed":
-			a.Breed = value.(string)
-		}
-	}
+func (a *Animal) GetEditableFields() string {
+	// Return the editable fields
+	EDITABLE_FIELDS := []string{"name", "description", "age", "breed"}
+	editableFields := strings.Join(EDITABLE_FIELDS, "|")
+	return editableFields
 }
 
 func (a *Animal) Clone() xBase.Base {
@@ -66,14 +52,13 @@ func (a *Animal) Clone() xBase.Base {
 func (a *Animal) Create(objMap map[string]interface{}) error {
 	// Set default values
 	a.ID = uint(uuid.New().ID())
-	a.Kind = "animal"
+	a.Kind = "person"
 	a.Deleted = false
 	a.Cloned = false
 	a.ClonedFromRef = 0
 
 	for key, value := range objMap {
-		editableFields := a.GetEditableFields()
-		if contains(editableFields, strings.ToLower(key)) {
+		if strings.Contains(a.GetEditableFields(), strings.ToLower(key)) {
 			field := reflect.ValueOf(a).Elem().FieldByNameFunc(func(fieldName string) bool {
 				return strings.EqualFold(fieldName, key)
 			})
@@ -82,44 +67,63 @@ func (a *Animal) Create(objMap map[string]interface{}) error {
 			}
 		}
 	}
-
-	return nil
+	return a.Save(nil)
 }
 
 func (a *Animal) Update(objMap map[string]interface{}) error {
-	// Update the animal
+	// Update the person
+	updates := make(map[string]interface{})
 	for key, value := range objMap {
-		editableFields := a.GetEditableFields()
-		if contains(editableFields, strings.ToLower(key)) {
+		if strings.Contains(a.GetEditableFields(), strings.ToLower(key)) {
 			field := reflect.ValueOf(a).Elem().FieldByNameFunc(func(fieldName string) bool {
 				return strings.EqualFold(fieldName, key)
 			})
 			if field.IsValid() && field.CanSet() {
-				field.Set(reflect.ValueOf(value))
+				updates[key] = value
 			}
+		} else {
+			err := fmt.Errorf("field '%s' is not editable", key)
+			return xError.NewEditError(err)
 		}
 	}
-	return nil
+	return a.Save(updates)
 }
 
 func (a *Animal) Delete() error {
-	a.Deleted = true
-	err := a.Save()
-	if err != nil {
-		return err
+	updates := map[string]interface{}{
+		"Deleted": true,
 	}
-	return nil
+	return a.Save(updates)
 }
 
-func (a *Animal) Save() error {
-	// Save the animal
-	directory := xDb.GetDirectory()
-	if directory == nil {
-		err := errors.New("directory not found")
+func (a *Animal) Save(updates map[string]interface{}) error {
+	session := xDb.GetSession()
+	if session == nil {
+		err := errors.New("session not found")
 		return xError.NewObjectNotFoundError(err)
 	}
 
 	// db add/update operations
+	existingRecord := &Person{}
+	err := session.ReadRecords(&Person{}, map[string]interface{}{"id": a.ID}, existingRecord)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "record not found") {
+			// Record does not exist, create a new one
+			err = session.CreateRecords(&Person{}, []interface{}{a})
+			if err != nil {
+				return xError.NewDBError(err)
+			}
+		} else {
+			// Some other error occurred
+			return xError.NewDBError(err)
+		}
+	} else {
+		// Record exists, update it
+		err = session.UpdateRecords(&Person{}, map[string]interface{}{"id": a.ID}, updates)
+		if err != nil {
+			return xError.NewDBError(err)
+		}
+	}
 	return nil
 }
 
@@ -141,16 +145,29 @@ func (a *Animal) ToString() string {
 func (a *Animal) ToStatus() map[string]interface{} {
 	// Convert the base to a status
 	return map[string]interface{}{
-		"id":   a.ID,
-		"kind": a.Kind,
-		"data": map[string]interface{}{
-			"name":            a.Name,
-			"age":             a.Age,
-			"deleted":         a.Deleted,
-			"description":     a.Description,
-			"Breed":           a.Breed,
-			"cloned":          a.Cloned,
-			"cloned_from_ref": a.ClonedFromRef,
-		},
+		"id":              a.ID,
+		"kind":            a.Kind,
+		"name":            a.Name,
+		"age":             a.Age,
+		"deleted":         a.Deleted,
+		"description":     a.Description,
+		"Breed":           a.Breed,
+		"cloned":          a.Cloned,
+		"cloned_from_ref": a.ClonedFromRef,
 	}
+}
+
+func GetAnimalByID(animalID string) (*Animal, error) {
+	session := xDb.GetSession()
+	if session == nil {
+		err := errors.New("session not found")
+		return nil, xError.NewObjectNotFoundError(err)
+	}
+
+	animal := &Animal{}
+	err := session.ReadRecords(&Person{}, map[string]interface{}{"id": animalID}, animal)
+	if err != nil {
+		return nil, xError.NewDBError(err)
+	}
+	return animal, nil
 }

@@ -14,36 +14,22 @@ import (
 )
 
 type Person struct {
-	Name          string
-	ID            uint
-	Kind          string
-	Age           uint8
-	Deleted       bool
-	Description   string
-	Nationality   string
-	Cloned        bool
-	ClonedFromRef uint
+	ID            uint   `gorm:"column:id;primaryKey;autoIncrement"`
+	Name          string `gorm:"column:name;type:varchar(100);not null"`
+	Kind          string `gorm:"column:kind;type:varchar(50);not null"`
+	Age           uint8  `gorm:"column:age;not null"`
+	Description   string `gorm:"column:description;type:text"`
+	Nationality   string `gorm:"column:nationality;type:varchar(100)"`
+	Deleted       bool   `gorm:"column:deleted;default:false"`
+	Cloned        bool   `gorm:"column:cloned;default:false"`
+	ClonedFromRef uint   `gorm:"column:cloned_from_ref;default:0"`
 }
 
-func (p *Person) GetEditableFields() []string {
-	// Get the editable fields
-	return []string{"name", "description", "age", "Nationality"}
-}
-
-func (p *Person) PostEditables(editMap map[string]interface{}) {
-	// Post the editable fields
-	for key, value := range editMap {
-		switch key {
-		case "name":
-			p.Name = value.(string)
-		case "description":
-			p.Description = value.(string)
-		case "age":
-			p.Age = value.(uint8)
-		case "Nationality":
-			p.Nationality = value.(string)
-		}
-	}
+func (p *Person) GetEditableFields() string {
+	// Return the editable fields
+	EDITABLE_FIELDS := []string{"name", "age", "description", "nationality"}
+	editableFields := strings.Join(EDITABLE_FIELDS, "|")
+	return editableFields
 }
 
 func (p *Person) Clone() xBase.Base {
@@ -72,8 +58,7 @@ func (p *Person) Create(objMap map[string]interface{}) error {
 	p.ClonedFromRef = 0
 
 	for key, value := range objMap {
-		editableFields := p.GetEditableFields()
-		if contains(editableFields, strings.ToLower(key)) {
+		if strings.Contains(p.GetEditableFields(), strings.ToLower(key)) {
 			field := reflect.ValueOf(p).Elem().FieldByNameFunc(func(fieldName string) bool {
 				return strings.EqualFold(fieldName, key)
 			})
@@ -82,53 +67,63 @@ func (p *Person) Create(objMap map[string]interface{}) error {
 			}
 		}
 	}
-
-	return nil
-}
-
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if strings.EqualFold(s, item) {
-			return true
-		}
-	}
-	return false
+	return p.Save(nil)
 }
 
 func (p *Person) Update(objMap map[string]interface{}) error {
 	// Update the person
+	updates := make(map[string]interface{})
 	for key, value := range objMap {
-		editableFields := p.GetEditableFields()
-		if contains(editableFields, strings.ToLower(key)) {
+		if strings.Contains(p.GetEditableFields(), strings.ToLower(key)) {
 			field := reflect.ValueOf(p).Elem().FieldByNameFunc(func(fieldName string) bool {
 				return strings.EqualFold(fieldName, key)
 			})
 			if field.IsValid() && field.CanSet() {
-				field.Set(reflect.ValueOf(value))
+				updates[key] = value
 			}
+		} else {
+			err := fmt.Errorf("field '%s' is not editable", key)
+			return xError.NewEditError(err)
 		}
 	}
-	return nil
+	return p.Save(updates)
 }
 
 func (p *Person) Delete() error {
-	p.Deleted = true
-	err := p.Save()
-	if err != nil {
-		return err
+	updates := map[string]interface{}{
+		"Deleted": true,
 	}
-	return nil
+	return p.Save(updates)
 }
 
-func (p *Person) Save() error {
-	// Save the person
-	directory := xDb.GetDirectory()
-	if directory == nil {
-		err := errors.New("directory not found")
+func (p *Person) Save(updates map[string]interface{}) error {
+	session := xDb.GetSession()
+	if session == nil {
+		err := errors.New("session not found")
 		return xError.NewObjectNotFoundError(err)
 	}
 
 	// db add/update operations
+	existingRecord := &Person{}
+	err := session.ReadRecords(&Person{}, map[string]interface{}{"id": p.ID}, existingRecord)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "record not found") {
+			// Record does not exist, create a new one
+			err = session.CreateRecords(&Person{}, []interface{}{p})
+			if err != nil {
+				return xError.NewDBError(err)
+			}
+		} else {
+			// Some other error occurred
+			return xError.NewDBError(err)
+		}
+	} else {
+		// Record exists, update it
+		err = session.UpdateRecords(&Person{}, map[string]interface{}{"id": p.ID}, updates)
+		if err != nil {
+			return xError.NewDBError(err)
+		}
+	}
 	return nil
 }
 
@@ -150,16 +145,29 @@ func (p *Person) ToString() string {
 func (p *Person) ToStatus() map[string]interface{} {
 	// Convert the base to a status
 	return map[string]interface{}{
-		"id":   p.ID,
-		"kind": p.Kind,
-		"data": map[string]interface{}{
-			"name":            p.Name,
-			"age":             p.Age,
-			"deleted":         p.Deleted,
-			"description":     p.Description,
-			"Nationality":     p.Nationality,
-			"cloned":          p.Cloned,
-			"cloned_from_ref": p.ClonedFromRef,
-		},
+		"id":              p.ID,
+		"kind":            p.Kind,
+		"name":            p.Name,
+		"age":             p.Age,
+		"deleted":         p.Deleted,
+		"description":     p.Description,
+		"Nationality":     p.Nationality,
+		"cloned":          p.Cloned,
+		"cloned_from_ref": p.ClonedFromRef,
 	}
+}
+
+func GetPersonByID(personID string) (*Person, error) {
+	session := xDb.GetSession()
+	if session == nil {
+		err := errors.New("session not found")
+		return nil, xError.NewObjectNotFoundError(err)
+	}
+
+	person := &Person{}
+	err := session.ReadRecords(&Person{}, map[string]interface{}{"id": personID}, person)
+	if err != nil {
+		return nil, xError.NewDBError(err)
+	}
+	return person, nil
 }

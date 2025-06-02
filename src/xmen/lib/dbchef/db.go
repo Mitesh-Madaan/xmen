@@ -1,80 +1,108 @@
 package dbchef
 
 import (
-	"errors"
+	"log"
+	"sync"
+
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-var db *Directory
+var (
+	db   *gorm.DB
+	once sync.Once
+)
 
-type Directory struct {
-	Records []Record
+type DBSession struct {
+	conn *gorm.DB
 }
 
-type Record struct {
-	Id         string
-	Kind       string
-	ObjDetails []byte
+// NewDBSession initializes a singleton DB connection
+func NewDBSession(connStr string) *DBSession {
+	once.Do(func() {
+		var err error
+		db, err = gorm.Open(postgres.Open(connStr), &gorm.Config{})
+		if err != nil {
+			log.Fatalf("Failed to connect to DB: %v", err)
+		}
+	})
+	return &DBSession{conn: db}
 }
 
-func GetDirectory() *Directory {
-	// Get the directory
-	if db != nil {
-		return db
-	}
-	db = createDirectory()
-	return db
-}
-
-func createDirectory() *Directory {
-	// Create a new directory
-	directory := Directory{}
-	directory.Records = make([]Record, 0)
-	return &directory
-}
-
-func NewRecord(id, kind string, details []byte) Record {
-	// Create a new record
-	return Record{
-		Id:         id,
-		Kind:       kind,
-		ObjDetails: details,
-	}
-}
-
-// Get retrieves an object by its ID and kind from the Directory.
-func (d *Directory) Get(id, kind string) ([]byte, error) {
-	for _, record := range d.Records {
-		if record.Id == id && record.Kind == kind {
-			return record.ObjDetails, nil
+// SeedTables seeds the database with initial data for the provided models
+func (s *DBSession) SeedTables(models []interface{}) error {
+	for _, model := range models {
+		err := s.conn.Migrator().CreateTable(model)
+		if err != nil {
+			return err
 		}
 	}
-	return nil, errors.New("record not found")
-}
-
-// Add adds a new object to the Directory.
-func (d *Directory) Add(id, kind string, details []byte) error {
-	d.Records = append(d.Records, NewRecord(id, kind, details))
 	return nil
 }
 
-// Update updates an existing object in the Directory.
-func (d *Directory) Update(id, kind string, details []byte) error {
-	for i, record := range d.Records {
-		if record.Id == id && record.Kind == kind {
-			d.Records[i].ObjDetails = details
-			return nil
+// CreateRecords inserts multiple records into the database
+func (s *DBSession) CreateRecords(model interface{}, records []interface{}) error {
+	for _, record := range records {
+		result := s.conn.Model(model).Create(record)
+		if result.Error != nil {
+			return result.Error
+		}
+		// Check if the record was created successfully
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
 		}
 	}
-	return errors.New("record not found")
+	return nil
 }
 
-// Delete removes an object from the Directory by its ID and kind.
-func (d *Directory) Delete(id, kind string) error {
-	for i, record := range d.Records {
-		if record.Id == id && record.Kind == kind {
-			d.Records = append(d.Records[:i], d.Records[i+1:]...)
-			return nil
-		}
+// ReadRecords retrieves records from the database based on the provided conditions
+func (s *DBSession) ReadRecords(model interface{}, conditions map[string]interface{}, records interface{}) error {
+	// Add notDeleted condition to avoid soft-deleted records
+	conditions["Deleted"] = false
+	result := s.conn.Model(model).Where(conditions).Find(records)
+	if result.Error != nil {
+		return result.Error
 	}
-	return errors.New("record not found")
+	// Check if any records were found
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// UpdateRecords updates records in the database based on the provided conditions
+func (s *DBSession) UpdateRecords(model interface{}, conditions map[string]interface{}, updates map[string]interface{}) error {
+	result := s.conn.Model(model).Where(conditions).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	// Check if any records were updated
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// DeleteRecords deletes records from the database based on the provided conditions
+func (s *DBSession) DeleteRecords(model interface{}, conditions map[string]interface{}) error {
+	updates := map[string]interface{}{
+		"Deleted": true,
+	}
+	return s.UpdateRecords(model, conditions, updates)
+}
+
+// Expose the session
+var Session *DBSession
+
+var connStr = "host=localhost user=gorm password=gorm dbname=gorm port=9920 sslmode=disable TimeZone=Asia/Shanghai"
+
+func InitSession(connStr string) {
+	Session = NewDBSession(connStr)
+}
+
+func GetSession() *DBSession {
+	if Session == nil {
+		InitSession(connStr)
+	}
+	return Session
 }
