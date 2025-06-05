@@ -24,14 +24,17 @@ TODO:
 - Intergration tests
 */
 
+var dbSession *xDb.DBSession
+var connStr = "host=localhost user=postgres password=Postsql.123 dbname=postgres port=5432 sslmode=disable TimeZone=Asia/Shanghai"
+
 func run() {
 	var err error
-
-	if session == nil {
-		session = xDb.GetSession()
+	if dbSession == nil {
+		dbSession = xDb.GetSession(connStr)
 	}
+	fmt.Printf("DB Session: %v\n", dbSession)
 
-	err = SeedTables()
+	err = SeedTables(dbSession)
 	if err != nil {
 		fmt.Printf("Error seeding tables: %v\n", err)
 		return
@@ -69,7 +72,7 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 		switch method {
 		case http.MethodGet:
 			personID := req.URL.Path[len("/person/"):]
-			person, err := xModels.GetPersonByID(personID)
+			person, err := xModels.GetPersonByID(dbSession, personID)
 			if err != nil {
 				errResponse := fmt.Sprintf("error saving person: %s", err.Error())
 				w.WriteHeader(http.StatusNotFound)
@@ -82,7 +85,7 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 
 		case http.MethodPost:
 			personID := req.URL.Path[len("/person/"):]
-			person, err := xModels.GetPersonByID(personID)
+			person, err := xModels.GetPersonByID(dbSession, personID)
 			if err != nil {
 				errResponse := fmt.Sprintf("Person Not found: %s", err.Error())
 				w.WriteHeader(http.StatusNotFound)
@@ -107,7 +110,7 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 				return
 			}
 
-			err = person.Update(editConfig)
+			err = person.Update(dbSession, editConfig)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to save person: %s", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -138,7 +141,7 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 			}
 
 			person := xModels.Person{}
-			err = person.Create(objMap)
+			err = person.Create(dbSession, objMap)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to save person: %s", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -153,7 +156,7 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 
 		case http.MethodDelete:
 			personID := req.URL.Path[len("/person/"):]
-			person, err := xModels.GetPersonByID(personID)
+			person, err := xModels.GetPersonByID(dbSession, personID)
 			if err != nil {
 				errResponse := fmt.Sprintf("Person not found: %s", err.Error())
 				w.WriteHeader(http.StatusNotFound)
@@ -161,7 +164,7 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 				return
 			}
 
-			err = person.Delete()
+			err = person.Delete(dbSession)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to delete person: %s", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -192,7 +195,7 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 		switch method {
 		case http.MethodGet:
 			animalID := req.URL.Path[len("/animal/"):]
-			animal, err := xModels.GetAnimalByID(animalID)
+			animal, err := xModels.GetAnimalByID(dbSession, animalID)
 			if err != nil {
 				errResponse := fmt.Sprintf("Animal not found: %s", err.Error())
 				w.WriteHeader(http.StatusNotFound)
@@ -205,7 +208,7 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 
 		case http.MethodPost:
 			animalID := req.URL.Path[len("/animal/"):]
-			animal, err := xModels.GetAnimalByID(animalID)
+			animal, err := xModels.GetAnimalByID(dbSession, animalID)
 			if err != nil {
 				errResponse := fmt.Sprintf("Animal not found: %s", err.Error())
 				w.WriteHeader(http.StatusNotFound)
@@ -230,7 +233,7 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 				return
 			}
 
-			err = animal.Update(editConfig)
+			err = animal.Update(dbSession, editConfig)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to save person: %s", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -261,7 +264,7 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 			}
 
 			animal := xModels.Animal{}
-			err = animal.Create(objMap)
+			err = animal.Create(dbSession, objMap)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to save person: %s", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -276,7 +279,7 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 
 		case http.MethodDelete:
 			animalID := req.URL.Path[len("/animal/"):]
-			animal, err := xModels.GetAnimalByID(animalID)
+			animal, err := xModels.GetAnimalByID(dbSession, animalID)
 			if err != nil {
 				errResponse := fmt.Sprintf("Animal not found: %s", err.Error())
 				w.WriteHeader(http.StatusNotFound)
@@ -284,7 +287,7 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 				return
 			}
 
-			err = animal.Delete()
+			err = animal.Delete(dbSession)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to delete person: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)

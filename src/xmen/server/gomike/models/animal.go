@@ -1,9 +1,7 @@
 package models
 
 import (
-	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/google/uuid"
@@ -17,7 +15,7 @@ type Animal struct {
 	ID            uint   `gorm:"column:id;primaryKey;autoIncrement"`
 	Name          string `gorm:"column:name;type:varchar(255);not null"`
 	Kind          string `gorm:"column:kind;type:varchar(100);not null"`
-	Age           uint8  `gorm:"column:age;type:tinyint;not null"`
+	Age           int    `gorm:"column:age;type:int;not null"`
 	Description   string `gorm:"column:description;type:text"`
 	Breed         string `gorm:"column:breed;type:varchar(255)"`
 	Deleted       bool   `gorm:"column:deleted;type:boolean;default:false"`
@@ -25,11 +23,26 @@ type Animal struct {
 	ClonedFromRef uint   `gorm:"column:cloned_from_ref;type:bigint;default:0"`
 }
 
-func (a *Animal) GetEditableFields() string {
-	// Return the editable fields
-	EDITABLE_FIELDS := []string{"name", "description", "age", "breed"}
-	editableFields := strings.Join(EDITABLE_FIELDS, "|")
-	return editableFields
+func (a *Animal) PostEditableFields(objMap map[string]interface{}) error {
+	// Update the editable fields
+	for key, value := range objMap {
+		// Print the key and value for debugging
+		fmt.Printf("Key: %s, Value: %v\n", key, value)
+		switch strings.ToLower(key) {
+		case "name":
+			a.Name = fmt.Sprintf("%v", value)
+		case "age":
+			a.Age = int(value.(float64)) // Assuming value is a float64, adjust as necessary
+		case "description":
+			a.Description = fmt.Sprintf("%v", value)
+		case "breed":
+			a.Breed = fmt.Sprintf("%v", value)
+		default:
+			err := fmt.Errorf("field '%s' is not editable", key)
+			return xError.NewEditError(err)
+		}
+	}
+	return nil
 }
 
 func (a *Animal) Clone() xBase.Base {
@@ -49,7 +62,7 @@ func (a *Animal) Clone() xBase.Base {
 	return newAnimal
 }
 
-func (a *Animal) Create(objMap map[string]interface{}) error {
+func (a *Animal) Create(dbSession *xDb.DBSession, objMap map[string]interface{}) error {
 	// Set default values
 	a.ID = uint(uuid.New().ID())
 	a.Kind = "person"
@@ -57,59 +70,44 @@ func (a *Animal) Create(objMap map[string]interface{}) error {
 	a.Cloned = false
 	a.ClonedFromRef = 0
 
-	for key, value := range objMap {
-		if strings.Contains(a.GetEditableFields(), strings.ToLower(key)) {
-			field := reflect.ValueOf(a).Elem().FieldByNameFunc(func(fieldName string) bool {
-				return strings.EqualFold(fieldName, key)
-			})
-			if field.IsValid() && field.CanSet() {
-				field.Set(reflect.ValueOf(value))
-			}
+	// Update the editable fields
+	if objMap != nil {
+		err := a.PostEditableFields(objMap)
+		if err != nil {
+			return err
 		}
 	}
-	return a.Save(nil)
+	// Save the person
+	return a.Save(dbSession, nil)
 }
 
-func (a *Animal) Update(objMap map[string]interface{}) error {
-	// Update the person
-	updates := make(map[string]interface{})
-	for key, value := range objMap {
-		if strings.Contains(a.GetEditableFields(), strings.ToLower(key)) {
-			field := reflect.ValueOf(a).Elem().FieldByNameFunc(func(fieldName string) bool {
-				return strings.EqualFold(fieldName, key)
-			})
-			if field.IsValid() && field.CanSet() {
-				updates[key] = value
-			}
-		} else {
-			err := fmt.Errorf("field '%s' is not editable", key)
-			return xError.NewEditError(err)
+func (a *Animal) Update(dbSession *xDb.DBSession, editMap map[string]interface{}) error {
+	// Update the editable fields
+	if editMap != nil {
+		err := a.PostEditableFields(editMap)
+		if err != nil {
+			return err
 		}
 	}
-	return a.Save(updates)
+	// Save the person
+	return a.Save(dbSession, editMap)
 }
 
-func (a *Animal) Delete() error {
+func (a *Animal) Delete(dbSession *xDb.DBSession) error {
 	updates := map[string]interface{}{
 		"Deleted": true,
 	}
-	return a.Save(updates)
+	return a.Save(dbSession, updates)
 }
 
-func (a *Animal) Save(updates map[string]interface{}) error {
-	session := xDb.GetSession()
-	if session == nil {
-		err := errors.New("session not found")
-		return xError.NewObjectNotFoundError(err)
-	}
-
+func (a *Animal) Save(dbSession *xDb.DBSession, updates map[string]interface{}) error {
 	// db add/update operations
-	existingRecord := &Person{}
-	err := session.ReadRecords(&Person{}, map[string]interface{}{"id": a.ID}, existingRecord)
+	existingRecord := &Animal{}
+	err := dbSession.ReadRecords(&Person{}, map[string]interface{}{"id": a.ID}, existingRecord)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "record not found") {
 			// Record does not exist, create a new one
-			err = session.CreateRecords(&Person{}, []interface{}{a})
+			err = dbSession.CreateRecords(&Animal{}, []interface{}{a})
 			if err != nil {
 				return xError.NewDBError(err)
 			}
@@ -119,7 +117,7 @@ func (a *Animal) Save(updates map[string]interface{}) error {
 		}
 	} else {
 		// Record exists, update it
-		err = session.UpdateRecords(&Person{}, map[string]interface{}{"id": a.ID}, updates)
+		err = dbSession.UpdateRecords(&Animal{}, map[string]interface{}{"id": a.ID}, updates)
 		if err != nil {
 			return xError.NewDBError(err)
 		}
@@ -136,7 +134,7 @@ func (a *Animal) ToString() string {
 	data += fmt.Sprintf("Age: %d ", a.Age)
 	data += fmt.Sprintf("Deleted: %t ", a.Deleted)
 	data += fmt.Sprintf("Description: %s ", a.Description)
-	data += fmt.Sprintf("Breed: %s", a.Breed)
+	data += fmt.Sprintf("Breed: %s ", a.Breed)
 	data += fmt.Sprintf("Cloned: %t ", a.Cloned)
 	data += fmt.Sprintf("Cloned From Ref: %d ", a.ClonedFromRef)
 	return data
@@ -157,15 +155,9 @@ func (a *Animal) ToStatus() map[string]interface{} {
 	}
 }
 
-func GetAnimalByID(animalID string) (*Animal, error) {
-	session := xDb.GetSession()
-	if session == nil {
-		err := errors.New("session not found")
-		return nil, xError.NewObjectNotFoundError(err)
-	}
-
+func GetAnimalByID(dbSession *xDb.DBSession, animalID string) (*Animal, error) {
 	animal := &Animal{}
-	err := session.ReadRecords(&Person{}, map[string]interface{}{"id": animalID}, animal)
+	err := dbSession.ReadRecords(&Animal{}, map[string]interface{}{"id": animalID}, animal)
 	if err != nil {
 		return nil, xError.NewDBError(err)
 	}

@@ -3,22 +3,19 @@ package main
 import (
 	"fmt"
 
-	"lib/dbchef"
-
 	xError "gomike/error"
 	xModels "gomike/models"
+	xDb "lib/dbchef"
 )
 
-var session *dbchef.DBSession
-
 // SeedTables creates and seeds Person and Animal tables
-func SeedTables() error {
+func SeedTables(dbSession *xDb.DBSession) error {
 	models := []interface{}{
 		&xModels.Person{},
 		&xModels.Animal{},
 	}
 
-	err := session.SeedTables(models)
+	err := dbSession.SeedTables(models)
 	if err != nil {
 		err := fmt.Errorf("failed to seed tables: %w", err)
 		return xError.NewDBError(err)
@@ -26,14 +23,9 @@ func SeedTables() error {
 	return nil
 }
 
-func SeedRecords() error {
+func SeedRecords(dbSession *xDb.DBSession) error {
 	// Seed the directory
-	var err error
-	session = dbchef.GetSession()
-	if session == nil {
-		err = fmt.Errorf("session not found")
-		return xError.NewObjectNotFoundError(err)
-	}
+	// var err error
 
 	// data, err := ioutil.ReadFile("/Users/mitesh.madaan/xmen/records.json")
 	// if err != nil {

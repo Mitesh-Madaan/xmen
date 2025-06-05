@@ -1,9 +1,7 @@
 package models
 
 import (
-	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/google/uuid"
@@ -17,7 +15,7 @@ type Person struct {
 	ID            uint   `gorm:"column:id;primaryKey;autoIncrement"`
 	Name          string `gorm:"column:name;type:varchar(100);not null"`
 	Kind          string `gorm:"column:kind;type:varchar(50);not null"`
-	Age           uint8  `gorm:"column:age;not null"`
+	Age           int    `gorm:"column:age;type:int;not null"`
 	Description   string `gorm:"column:description;type:text"`
 	Nationality   string `gorm:"column:nationality;type:varchar(100)"`
 	Deleted       bool   `gorm:"column:deleted;default:false"`
@@ -25,11 +23,26 @@ type Person struct {
 	ClonedFromRef uint   `gorm:"column:cloned_from_ref;default:0"`
 }
 
-func (p *Person) GetEditableFields() string {
-	// Return the editable fields
-	EDITABLE_FIELDS := []string{"name", "age", "description", "nationality"}
-	editableFields := strings.Join(EDITABLE_FIELDS, "|")
-	return editableFields
+func (p *Person) PostEditableFields(objMap map[string]interface{}) error {
+	// Update the editable fields
+	for key, value := range objMap {
+		// Print the key and value for debugging
+		fmt.Printf("Key: %s, Value: %v\n", key, value)
+		switch strings.ToLower(key) {
+		case "name":
+			p.Name = fmt.Sprintf("%v", value)
+		case "age":
+			p.Age = int(value.(float64)) // Assuming value is a float64, adjust as necessary
+		case "description":
+			p.Description = fmt.Sprintf("%v", value)
+		case "nationality":
+			p.Nationality = fmt.Sprintf("%v", value)
+		default:
+			err := fmt.Errorf("field '%s' is not editable", key)
+			return xError.NewEditError(err)
+		}
+	}
+	return nil
 }
 
 func (p *Person) Clone() xBase.Base {
@@ -49,7 +62,7 @@ func (p *Person) Clone() xBase.Base {
 	return newPerson
 }
 
-func (p *Person) Create(objMap map[string]interface{}) error {
+func (p *Person) Create(dbSession *xDb.DBSession, objMap map[string]interface{}) error {
 	// Set default values
 	p.ID = uint(uuid.New().ID())
 	p.Kind = "person"
@@ -57,59 +70,45 @@ func (p *Person) Create(objMap map[string]interface{}) error {
 	p.Cloned = false
 	p.ClonedFromRef = 0
 
-	for key, value := range objMap {
-		if strings.Contains(p.GetEditableFields(), strings.ToLower(key)) {
-			field := reflect.ValueOf(p).Elem().FieldByNameFunc(func(fieldName string) bool {
-				return strings.EqualFold(fieldName, key)
-			})
-			if field.IsValid() && field.CanSet() {
-				field.Set(reflect.ValueOf(value))
-			}
+	// Update the editable fields
+	if objMap != nil {
+		err := p.PostEditableFields(objMap)
+		if err != nil {
+			return err
 		}
 	}
-	return p.Save(nil)
+	fmt.Println("Creating person with details:", p.ToString())
+	// Save the person
+	return p.Save(dbSession, nil)
 }
 
-func (p *Person) Update(objMap map[string]interface{}) error {
-	// Update the person
-	updates := make(map[string]interface{})
-	for key, value := range objMap {
-		if strings.Contains(p.GetEditableFields(), strings.ToLower(key)) {
-			field := reflect.ValueOf(p).Elem().FieldByNameFunc(func(fieldName string) bool {
-				return strings.EqualFold(fieldName, key)
-			})
-			if field.IsValid() && field.CanSet() {
-				updates[key] = value
-			}
-		} else {
-			err := fmt.Errorf("field '%s' is not editable", key)
-			return xError.NewEditError(err)
+func (p *Person) Update(dbSession *xDb.DBSession, editMap map[string]interface{}) error {
+	// Update the editable fields
+	if editMap != nil {
+		err := p.PostEditableFields(editMap)
+		if err != nil {
+			return err
 		}
 	}
-	return p.Save(updates)
+	// Save the person with updates
+	return p.Save(dbSession, editMap)
 }
 
-func (p *Person) Delete() error {
+func (p *Person) Delete(dbSession *xDb.DBSession) error {
 	updates := map[string]interface{}{
 		"Deleted": true,
 	}
-	return p.Save(updates)
+	return p.Save(dbSession, updates)
 }
 
-func (p *Person) Save(updates map[string]interface{}) error {
-	session := xDb.GetSession()
-	if session == nil {
-		err := errors.New("session not found")
-		return xError.NewObjectNotFoundError(err)
-	}
-
+func (p *Person) Save(dbSession *xDb.DBSession, updates map[string]interface{}) error {
 	// db add/update operations
 	existingRecord := &Person{}
-	err := session.ReadRecords(&Person{}, map[string]interface{}{"id": p.ID}, existingRecord)
+	err := dbSession.ReadRecords(&Person{}, map[string]interface{}{"id": p.ID}, existingRecord)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "record not found") {
 			// Record does not exist, create a new one
-			err = session.CreateRecords(&Person{}, []interface{}{p})
+			err = dbSession.CreateRecords(&Person{}, []interface{}{p})
 			if err != nil {
 				return xError.NewDBError(err)
 			}
@@ -119,7 +118,7 @@ func (p *Person) Save(updates map[string]interface{}) error {
 		}
 	} else {
 		// Record exists, update it
-		err = session.UpdateRecords(&Person{}, map[string]interface{}{"id": p.ID}, updates)
+		err = dbSession.UpdateRecords(&Person{}, map[string]interface{}{"id": p.ID}, updates)
 		if err != nil {
 			return xError.NewDBError(err)
 		}
@@ -136,7 +135,7 @@ func (p *Person) ToString() string {
 	data += fmt.Sprintf("Age: %d ", p.Age)
 	data += fmt.Sprintf("Deleted: %t ", p.Deleted)
 	data += fmt.Sprintf("Description: %s ", p.Description)
-	data += fmt.Sprintf("Nationality: %s", p.Nationality)
+	data += fmt.Sprintf("Nationality: %s ", p.Nationality)
 	data += fmt.Sprintf("Cloned: %t ", p.Cloned)
 	data += fmt.Sprintf("Cloned From Ref: %d ", p.ClonedFromRef)
 	return data
@@ -157,15 +156,9 @@ func (p *Person) ToStatus() map[string]interface{} {
 	}
 }
 
-func GetPersonByID(personID string) (*Person, error) {
-	session := xDb.GetSession()
-	if session == nil {
-		err := errors.New("session not found")
-		return nil, xError.NewObjectNotFoundError(err)
-	}
-
+func GetPersonByID(dbSession *xDb.DBSession, personID string) (*Person, error) {
 	person := &Person{}
-	err := session.ReadRecords(&Person{}, map[string]interface{}{"id": personID}, person)
+	err := dbSession.ReadRecords(&Person{}, map[string]interface{}{"id": personID}, person)
 	if err != nil {
 		return nil, xError.NewDBError(err)
 	}

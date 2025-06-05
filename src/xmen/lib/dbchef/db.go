@@ -32,9 +32,11 @@ func NewDBSession(connStr string) *DBSession {
 // SeedTables seeds the database with initial data for the provided models
 func (s *DBSession) SeedTables(models []interface{}) error {
 	for _, model := range models {
-		err := s.conn.Migrator().CreateTable(model)
-		if err != nil {
-			return err
+		if !s.conn.Migrator().HasTable(model) {
+			err := s.conn.Migrator().CreateTable(model)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -58,7 +60,7 @@ func (s *DBSession) CreateRecords(model interface{}, records []interface{}) erro
 // ReadRecords retrieves records from the database based on the provided conditions
 func (s *DBSession) ReadRecords(model interface{}, conditions map[string]interface{}, records interface{}) error {
 	// Add notDeleted condition to avoid soft-deleted records
-	conditions["Deleted"] = false
+	conditions["deleted"] = false
 	result := s.conn.Model(model).Where(conditions).Find(records)
 	if result.Error != nil {
 		return result.Error
@@ -94,13 +96,11 @@ func (s *DBSession) DeleteRecords(model interface{}, conditions map[string]inter
 // Expose the session
 var Session *DBSession
 
-var connStr = "host=localhost user=gorm password=gorm dbname=gorm port=9920 sslmode=disable TimeZone=Asia/Shanghai"
-
 func InitSession(connStr string) {
 	Session = NewDBSession(connStr)
 }
 
-func GetSession() *DBSession {
+func GetSession(connStr string) *DBSession {
 	if Session == nil {
 		InitSession(connStr)
 	}
