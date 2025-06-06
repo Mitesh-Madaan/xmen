@@ -59,8 +59,6 @@ func (s *DBSession) CreateRecords(model interface{}, records []interface{}) erro
 
 // ReadRecords retrieves records from the database based on the provided conditions
 func (s *DBSession) ReadRecords(model interface{}, conditions map[string]interface{}, records interface{}) error {
-	// Add notDeleted condition to avoid soft-deleted records
-	conditions["deleted"] = false
 	result := s.conn.Model(model).Where(conditions).Find(records)
 	if result.Error != nil {
 		return result.Error
@@ -87,10 +85,15 @@ func (s *DBSession) UpdateRecords(model interface{}, conditions map[string]inter
 
 // DeleteRecords deletes records from the database based on the provided conditions
 func (s *DBSession) DeleteRecords(model interface{}, conditions map[string]interface{}) error {
-	updates := map[string]interface{}{
-		"Deleted": true,
+	result := s.conn.Model(model).Where(conditions).Delete(model)
+	if result.Error != nil {
+		return result.Error
 	}
-	return s.UpdateRecords(model, conditions, updates)
+	// Check if any records were deleted
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // Expose the session
