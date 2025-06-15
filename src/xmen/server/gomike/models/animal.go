@@ -1,8 +1,8 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
 
@@ -22,28 +22,6 @@ type Animal struct {
 	ClonedFromRef string `gorm:"column:cloned_from_ref;type:varchar(100);default:''"`
 }
 
-func (a *Animal) PostEditableFields(objMap map[string]interface{}) error {
-	// Update the editable fields
-	for key, value := range objMap {
-		// Print the key and value for debugging
-		fmt.Printf("Key: %s, Value: %v\n", key, value)
-		switch strings.ToLower(key) {
-		case "name":
-			a.Name = fmt.Sprintf("%v", value)
-		case "age":
-			a.Age = int(value.(float64)) // Assuming value is a float64, adjust as necessary
-		case "description":
-			a.Description = fmt.Sprintf("%v", value)
-		case "breed":
-			a.Breed = fmt.Sprintf("%v", value)
-		default:
-			err := fmt.Errorf("field '%s' is not editable", key)
-			return xError.NewEditError(err)
-		}
-	}
-	return nil
-}
-
 func (a *Animal) Clone() xBase.Base {
 	// Clone the Animal
 	randomUUID := uuid.New().String()
@@ -60,47 +38,38 @@ func (a *Animal) Clone() xBase.Base {
 	return newAnimal
 }
 
-func (a *Animal) Create(dbSession *xDb.DBSession, objMap map[string]interface{}) error {
-	// Set default values
+func (a *Animal) Create(dbSession *xDb.DBSession, objDetails []byte) error {
+	// Parse the JSON object details
+	err := json.Unmarshal(objDetails, a)
+	if err != nil {
+		return xError.NewParseError(err)
+	}
+
+	// Setting default values
 	a.Kind = "animal"
 	a.Cloned = false
 	a.ClonedFromRef = ""
 
-	// Update the editable fields
-	if objMap != nil {
-		if objMap["id"] != nil {
-			// If an ID is provided, set it
-			a.ID = objMap["id"].(string)
-			delete(objMap, "id") // Remove ID from objMap to avoid conflicts
-		} else {
-			// If no ID is provided, generate a new one
-			a.ID = uuid.New().String()
-		}
-		err := a.PostEditableFields(objMap)
-		if err != nil {
-			return err
-		}
-	}
 	fmt.Println("Creating animal with details:", a.ToString())
-	// Create the animal
-	err := dbSession.CreateRecords(&Animal{}, []interface{}{a})
+	// Create the person
+	err = dbSession.CreateRecords(&Animal{}, []interface{}{a})
 	if err != nil {
 		return xError.NewDBError(err)
 	}
 	return nil
 }
 
-func (a *Animal) Update(dbSession *xDb.DBSession, editMap map[string]interface{}) error {
+func (a *Animal) Update(dbSession *xDb.DBSession, objDetails []byte) error {
 	// Update the editable fields
-	if editMap != nil {
-		err := a.PostEditableFields(editMap)
+	if objDetails != nil {
+		err := json.Unmarshal(objDetails, &a)
 		if err != nil {
-			return err
+			return xError.NewParseError(err)
 		}
 	}
 	fmt.Println("Updating animal with details:", a.ToString())
-	// Update the animal
-	err := dbSession.UpdateRecords(&Animal{}, map[string]interface{}{"id": a.ID}, editMap)
+	// Update the person
+	err := dbSession.UpdateRecords(&Animal{}, map[string]interface{}{"id": a.ID}, a.ToStatus())
 	if err != nil {
 		return xError.NewDBError(err)
 	}

@@ -1,14 +1,14 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
-	"strings"
-
-	"github.com/google/uuid"
 
 	xError "gomike/error"
 	xBase "lib/base"
 	xDb "lib/dbchef"
+
+	"github.com/google/uuid"
 )
 
 type Person struct {
@@ -20,28 +20,6 @@ type Person struct {
 	Nationality   string `gorm:"column:nationality;type:varchar(100)"`
 	Cloned        bool   `gorm:"column:cloned;default:false"`
 	ClonedFromRef string `gorm:"column:cloned_from_ref;type:varchar(100);default:''"`
-}
-
-func (p *Person) PostEditableFields(objMap map[string]interface{}) error {
-	// Update the editable fields
-	for key, value := range objMap {
-		// Print the key and value for debugging
-		fmt.Printf("Key: %s, Value: %v\n", key, value)
-		switch strings.ToLower(key) {
-		case "name":
-			p.Name = fmt.Sprintf("%v", value)
-		case "age":
-			p.Age = int(value.(float64)) // Assuming value is a float64, adjust as necessary
-		case "description":
-			p.Description = fmt.Sprintf("%v", value)
-		case "nationality":
-			p.Nationality = fmt.Sprintf("%v", value)
-		default:
-			err := fmt.Errorf("field '%s' is not editable", key)
-			return xError.NewEditError(err)
-		}
-	}
-	return nil
 }
 
 func (p *Person) Clone() xBase.Base {
@@ -60,47 +38,38 @@ func (p *Person) Clone() xBase.Base {
 	return newPerson
 }
 
-func (p *Person) Create(dbSession *xDb.DBSession, objMap map[string]interface{}) error {
-	// Set default values
+func (p *Person) Create(dbSession *xDb.DBSession, objDetails []byte) error {
+	// Parse the JSON object details
+	err := json.Unmarshal(objDetails, p)
+	if err != nil {
+		return xError.NewParseError(err)
+	}
+
+	// Setting default values
 	p.Kind = "person"
 	p.Cloned = false
 	p.ClonedFromRef = ""
 
-	// Update the editable fields
-	if objMap != nil {
-		if objMap["id"] != nil {
-			// If ID is provided, set it
-			p.ID = objMap["id"].(string)
-			delete(objMap, "id") // Remove ID from objMap to avoid conflicts
-		} else {
-			// Generate a new ID if not provided
-			p.ID = uuid.New().String()
-		}
-		err := p.PostEditableFields(objMap)
-		if err != nil {
-			return err
-		}
-	}
 	fmt.Println("Creating person with details:", p.ToString())
 	// Create the person
-	err := dbSession.CreateRecords(&Person{}, []interface{}{p})
+	err = dbSession.CreateRecords(&Person{}, []interface{}{p})
 	if err != nil {
 		return xError.NewDBError(err)
 	}
 	return nil
 }
 
-func (p *Person) Update(dbSession *xDb.DBSession, editMap map[string]interface{}) error {
+func (p *Person) Update(dbSession *xDb.DBSession, objDetails []byte) error {
 	// Update the editable fields
-	if editMap != nil {
-		err := p.PostEditableFields(editMap)
+	if objDetails != nil {
+		err := json.Unmarshal(objDetails, &p)
 		if err != nil {
-			return err
+			return xError.NewParseError(err)
 		}
 	}
 	fmt.Println("Updating person with details:", p.ToString())
 	// Update the person
-	err := dbSession.UpdateRecords(&Person{}, map[string]interface{}{"id": p.ID}, editMap)
+	err := dbSession.UpdateRecords(&Person{}, map[string]interface{}{"id": p.ID}, p.ToStatus())
 	if err != nil {
 		return xError.NewDBError(err)
 	}

@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/google/uuid"
+
 	xModels "gomike/models"
 	xDb "lib/dbchef"
 )
@@ -30,7 +32,7 @@ Code Review:
 - Change UUID to string > Check GORM documentation DONE
 - Different handlers for different methods
 - Fix ID parsing from URL {placeholders} DONE
-- Parse object from request body directly
+- Parse object from request body directly DONE
 - Create model independent, not member of model class ; CRUD operations indenpendent of models
 - API field validation : Check field function (optional) ; Explore OpenAPI 3 schema ; Generate models from schema automatically
 - Just pass object in db methods, no need to pass model, Use generic
@@ -164,22 +166,12 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 				return
 			}
 
-			var objMap map[string]interface{}
-			err = json.Unmarshal(body, &objMap)
-			if err != nil {
-				errResponse := fmt.Sprintf("Failed to unmarshal request body: %s", err.Error())
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(errResponse))
-				return
-			}
-
 			person, err := xModels.GetPersonByID(dbSession, personID)
 			if err != nil {
 				if strings.Contains(strings.ToLower(err.Error()), "record not found") {
-					objMap["id"] = personID // Ensure the ID is set for creation
 					// Create the person
-					person := xModels.Person{}
-					err = person.Create(dbSession, objMap)
+					person := xModels.Person{ID: personID} // Create a new person instance with the ID from the URL
+					err = person.Create(dbSession, body)
 					if err != nil {
 						errResponse := fmt.Sprintf("Failed to create person: %s", err.Error())
 						w.WriteHeader(http.StatusInternalServerError)
@@ -197,7 +189,7 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 			}
 
 			// Update the person
-			err = person.Update(dbSession, objMap)
+			err = person.Update(dbSession, body)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to update person: %s", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -217,17 +209,8 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 				return
 			}
 
-			var objMap map[string]interface{}
-			err = json.Unmarshal(body, &objMap)
-			if err != nil {
-				errResponse := fmt.Sprintf("Failed to unmarshal request body: %s", err.Error())
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(errResponse))
-				return
-			}
-
-			person := xModels.Person{}
-			err = person.Create(dbSession, objMap)
+			person := xModels.Person{ID: uuid.New().String()} // Create a new person instance
+			err = person.Create(dbSession, body)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to create person: %s", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -257,15 +240,6 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 				return
 			}
 
-			var objMap map[string]interface{}
-			err = json.Unmarshal(body, &objMap)
-			if err != nil {
-				errResponse := fmt.Sprintf("Failed to unmarshal request body: %s", err.Error())
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(errResponse))
-				return
-			}
-
 			person, err := xModels.GetPersonByID(dbSession, personID)
 			if err != nil {
 				if strings.Contains(strings.ToLower(err.Error()), "record not found") {
@@ -281,7 +255,7 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 			}
 
 			// Update the person
-			err = person.Update(dbSession, objMap)
+			err = person.Update(dbSession, body)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to update person: %s", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -382,22 +356,12 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 				return
 			}
 
-			var objMap map[string]interface{}
-			err = json.Unmarshal(body, &objMap)
-			if err != nil {
-				errResponse := fmt.Sprintf("Failed to unmarshal request body: %s", err.Error())
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(errResponse))
-				return
-			}
-
 			animal, err := xModels.GetAnimalByID(dbSession, animalID)
 			if err != nil {
 				if strings.Contains(strings.ToLower(err.Error()), "record not found") {
-					objMap["id"] = animalID // Ensure the ID is set for creation
 					// Create the animal
-					animal := xModels.Animal{}
-					err = animal.Create(dbSession, objMap)
+					animal := xModels.Animal{ID: animalID} // Create a new animal instance with the ID from the URL
+					err = animal.Create(dbSession, body)
 					if err != nil {
 						errResponse := fmt.Sprintf("Failed to create animal: %s", err.Error())
 						w.WriteHeader(http.StatusInternalServerError)
@@ -415,7 +379,7 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 			}
 
 			// Update the animal
-			err = animal.Update(dbSession, objMap)
+			err = animal.Update(dbSession, body)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to update animal: %s", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -444,8 +408,8 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 				return
 			}
 
-			animal := xModels.Animal{}
-			err = animal.Create(dbSession, objMap)
+			animal := xModels.Animal{ID: uuid.New().String()} // Create a new animal instance
+			err = animal.Create(dbSession, body)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to create animal: %s", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -499,7 +463,7 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 			}
 
 			// Update the animal
-			err = animal.Update(dbSession, objMap)
+			err = animal.Update(dbSession, body)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to update animal: %s", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
