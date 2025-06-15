@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strconv"
+	"net/url"
 	"strings"
 
 	xModels "gomike/models"
@@ -26,10 +26,10 @@ TODO:
 - Intergration tests
 
 Code Review:
-- Auth: Pending middleware for authentication, user login mechanism
-- Change UUID to string > Check GORM documentation
+- Auth: Pending middleware for authentication DONE
+- Change UUID to string > Check GORM documentation DONE
 - Different handlers for different methods
-- Fix ID parsing from URL {placeholders}
+- Fix ID parsing from URL {placeholders} DONE
 - Parse object from request body directly
 - Create model independent, not member of model class ; CRUD operations indenpendent of models
 - API field validation : Check field function (optional) ; Explore OpenAPI 3 schema ; Generate models from schema automatically
@@ -98,6 +98,22 @@ func middleware(next http.Handler) http.Handler {
 	})
 }
 
+// parse ID from URL query parameters
+func parseIDFromURL(urlPath *url.URL) (string, error) {
+	listIDs := urlPath.Query()["id"]
+
+	if len(listIDs) == 0 {
+		err := fmt.Errorf("ID is required in the URL")
+		return "", err
+	}
+	if len(listIDs) > 1 {
+		err := fmt.Errorf("only one ID is allowed in the URL")
+		return "", err
+	}
+
+	return listIDs[0], nil
+}
+
 func handlePerson() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
 		method := req.Method
@@ -106,18 +122,18 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 
 		switch method {
 		case http.MethodGet:
-			personID := req.URL.Path[len("/person/"):]
-			personIDUint, err := strconv.ParseUint(personID, 10, 32)
+			personID, err := parseIDFromURL(req.URL)
 			if err != nil {
-				errResponse := fmt.Sprintf("Invalid person ID: %s", err.Error())
+				errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte(errResponse))
 				return
 			}
-			person, err := xModels.GetPersonByID(dbSession, personIDUint)
+
+			person, err := xModels.GetPersonByID(dbSession, personID)
 			if err != nil {
 				if strings.Contains(strings.ToLower(err.Error()), "record not found") {
-					errResponse := fmt.Sprintf("Person  with ID %d not found: %s", personIDUint, err.Error())
+					errResponse := fmt.Sprintf("Person  with ID %s not found: %s", personID, err.Error())
 					w.WriteHeader(http.StatusNotFound)
 					w.Write([]byte(errResponse))
 					return
@@ -132,7 +148,14 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 			return
 
 		case http.MethodPut:
-			personID := req.URL.Path[len("/person/"):]
+			personID, err := parseIDFromURL(req.URL)
+			if err != nil {
+				errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(errResponse))
+				return
+			}
+
 			body, err := ioutil.ReadAll(req.Body)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to read request body: %s", err.Error())
@@ -150,17 +173,10 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 				return
 			}
 
-			personIDUint, err := strconv.ParseUint(personID, 10, 32)
-			if err != nil {
-				errResponse := fmt.Sprintf("Invalid person ID: %s", err.Error())
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(errResponse))
-				return
-			}
-			person, err := xModels.GetPersonByID(dbSession, personIDUint)
+			person, err := xModels.GetPersonByID(dbSession, personID)
 			if err != nil {
 				if strings.Contains(strings.ToLower(err.Error()), "record not found") {
-					objMap["id"] = personIDUint // Ensure the ID is set for creation
+					objMap["id"] = personID // Ensure the ID is set for creation
 					// Create the person
 					person := xModels.Person{}
 					err = person.Create(dbSession, objMap)
@@ -220,12 +236,19 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 			}
 
 			w.WriteHeader(http.StatusCreated)
-			res := fmt.Sprintf("Person with ID %d added", person.ID)
+			res := fmt.Sprintf("Person with ID %s added", person.ID)
 			w.Write([]byte(res))
 			return
 
 		case http.MethodPatch:
-			personID := req.URL.Path[len("/person/"):]
+			personID, err := parseIDFromURL(req.URL)
+			if err != nil {
+				errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(errResponse))
+				return
+			}
+
 			body, err := ioutil.ReadAll(req.Body)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to read request body: %s", err.Error())
@@ -243,14 +266,7 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 				return
 			}
 
-			personIDUint, err := strconv.ParseUint(personID, 10, 32)
-			if err != nil {
-				errResponse := fmt.Sprintf("Invalid person ID: %s", err.Error())
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(errResponse))
-				return
-			}
-			person, err := xModels.GetPersonByID(dbSession, personIDUint)
+			person, err := xModels.GetPersonByID(dbSession, personID)
 			if err != nil {
 				if strings.Contains(strings.ToLower(err.Error()), "record not found") {
 					errResponse := fmt.Sprintf("Patch method is only allowed on existing records. Person with ID %s not found", personID)
@@ -277,15 +293,15 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 			return
 
 		case http.MethodDelete:
-			personID := req.URL.Path[len("/person/"):]
-			personIDUint, err := strconv.ParseUint(personID, 10, 32)
+			personID, err := parseIDFromURL(req.URL)
 			if err != nil {
-				errResponse := fmt.Sprintf("Invalid person ID: %s", err.Error())
+				errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte(errResponse))
 				return
 			}
-			person, err := xModels.GetPersonByID(dbSession, personIDUint)
+
+			person, err := xModels.GetPersonByID(dbSession, personID)
 			if err != nil {
 				errResponse := fmt.Sprintf("Person not found: %s", err.Error())
 				w.WriteHeader(http.StatusNotFound)
@@ -302,7 +318,7 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 			}
 
 			w.WriteHeader(http.StatusOK)
-			res := fmt.Sprintf("Person with ID %d deleted", person.ID)
+			res := fmt.Sprintf("Person with ID %s deleted", personID)
 			w.Write([]byte(res))
 			return
 
@@ -323,19 +339,19 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 
 		switch method {
 		case http.MethodGet:
-			animalID := req.URL.Path[len("/animal/"):]
-			animalIDUint, err := strconv.ParseUint(animalID, 10, 32)
+			animalID, err := parseIDFromURL(req.URL)
 			if err != nil {
-				errResponse := fmt.Sprintf("Invalid animal ID: %s", err.Error())
+				errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte(errResponse))
 				return
 			}
+
 			// Retrieve the animal by ID
-			animal, err := xModels.GetAnimalByID(dbSession, animalIDUint)
+			animal, err := xModels.GetAnimalByID(dbSession, animalID)
 			if err != nil {
 				if strings.Contains(strings.ToLower(err.Error()), "record not found") {
-					errResponse := fmt.Sprintf("Animal  with ID %d not found: %s", animalIDUint, err.Error())
+					errResponse := fmt.Sprintf("Animal  with ID %s not found: %s", animalID, err.Error())
 					w.WriteHeader(http.StatusNotFound)
 					w.Write([]byte(errResponse))
 					return
@@ -350,7 +366,14 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 			return
 
 		case http.MethodPut:
-			animalID := req.URL.Path[len("/animal/"):]
+			animalID, err := parseIDFromURL(req.URL)
+			if err != nil {
+				errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(errResponse))
+				return
+			}
+
 			body, err := ioutil.ReadAll(req.Body)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to read request body: %s", err.Error())
@@ -368,16 +391,10 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 				return
 			}
 
-			animalIDUint, err := strconv.ParseUint(animalID, 10, 32)
-			if err != nil {
-				errResponse := fmt.Sprintf("Invalid animal ID: %s", err.Error())
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(errResponse))
-			}
-			animal, err := xModels.GetAnimalByID(dbSession, animalIDUint)
+			animal, err := xModels.GetAnimalByID(dbSession, animalID)
 			if err != nil {
 				if strings.Contains(strings.ToLower(err.Error()), "record not found") {
-					objMap["id"] = animalIDUint // Ensure the ID is set for creation
+					objMap["id"] = animalID // Ensure the ID is set for creation
 					// Create the animal
 					animal := xModels.Animal{}
 					err = animal.Create(dbSession, objMap)
@@ -437,12 +454,19 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 			}
 
 			w.WriteHeader(http.StatusCreated)
-			res := fmt.Sprintf("Animal with ID %d added", animal.ID)
+			res := fmt.Sprintf("Animal with ID %s added", animal.ID)
 			w.Write([]byte(res))
 			return
 
 		case http.MethodPatch:
-			animalID := req.URL.Path[len("/animal/"):]
+			animalID, err := parseIDFromURL(req.URL)
+			if err != nil {
+				errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(errResponse))
+				return
+			}
+
 			body, err := ioutil.ReadAll(req.Body)
 			if err != nil {
 				errResponse := fmt.Sprintf("Failed to read request body: %s", err.Error())
@@ -460,15 +484,7 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 				return
 			}
 
-			animalIDUint, err := strconv.ParseUint(animalID, 10, 32)
-			if err != nil {
-				errResponse := fmt.Sprintf("Invalid animal ID: %s", err.Error())
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(errResponse))
-				return
-			}
-
-			animal, err := xModels.GetAnimalByID(dbSession, animalIDUint)
+			animal, err := xModels.GetAnimalByID(dbSession, animalID)
 			if err != nil {
 				if strings.Contains(strings.ToLower(err.Error()), "record not found") {
 					errResponse := fmt.Sprintf("Patch method is only allowed on existing records. Animal with ID %s not found", animalID)
@@ -495,15 +511,15 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 			return
 
 		case http.MethodDelete:
-			animalID := req.URL.Path[len("/animal/"):]
-			animalIDUint, err := strconv.ParseUint(animalID, 10, 32)
+			animalID, err := parseIDFromURL(req.URL)
 			if err != nil {
-				errResponse := fmt.Sprintf("Invalid animal ID: %s", err.Error())
+				errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte(errResponse))
 				return
 			}
-			animal, err := xModels.GetAnimalByID(dbSession, animalIDUint)
+
+			animal, err := xModels.GetAnimalByID(dbSession, animalID)
 			if err != nil {
 				errResponse := fmt.Sprintf("Animal not found: %s", err.Error())
 				w.WriteHeader(http.StatusNotFound)
@@ -520,7 +536,7 @@ func handleAnimal() func(http.ResponseWriter, *http.Request) {
 			}
 
 			w.WriteHeader(http.StatusOK)
-			res := fmt.Sprintf("Animal with ID %d deleted", animal.ID)
+			res := fmt.Sprintf("Animal with ID %s deleted", animalID)
 			w.Write([]byte(res))
 			return
 
