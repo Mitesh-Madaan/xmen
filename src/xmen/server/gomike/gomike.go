@@ -24,6 +24,24 @@ TODO:
 - Minimum viable product (binaries, tests, documentation)
 - Publish as docker image
 - Intergration tests
+
+Code Review:
+- Auth: Pending middleware for authentication, user login mechanism
+- Change UUID to string > Check GORM documentation
+- Different handlers for different methods
+- Fix ID parsing from URL {placeholders}
+- Parse object from request body directly
+- Create model independent, not member of model class ; CRUD operations indenpendent of models
+- API field validation : Check field function (optional) ; Explore OpenAPI 3 schema ; Generate models from schema automatically
+- Just pass object in db methods, no need to pass model, Use generic
+- Multiline string in ToString method > use %v
+- To Status > no need to implement, just return object as json
+- Return resp of API as json marshall of object
+- Logging? log/Slog structured logging go package
+
+Next:
+- UT: Check ways to unit test http calls
+- MVP
 */
 
 var dbSession *xDb.DBSession
@@ -44,9 +62,13 @@ func run() {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/person/", handlePerson())
+	// mux.HandleFunc("/person/", handlePerson())
+	// mux.Handle("/person/", handler(handlePerson()))
+	mux.Handle("/person/", handlerWithMiddleware(handlePerson(), middleware))
 
-	mux.HandleFunc("/animal/", handleAnimal())
+	// mux.HandleFunc("/animal/", handleAnimal())
+	// mux.Handle("/animal/", handler(handleAnimal()))
+	mux.Handle("/animal/", handlerWithMiddleware(handleAnimal(), middleware))
 
 	fmt.Println("Starting server at port 8080")
 	if err := http.ListenAndServe("localhost:8080", mux); err != nil {
@@ -55,17 +77,29 @@ func run() {
 
 }
 
-func handlePerson() func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, req *http.Request) {
-		auth_header := req.Header.Get("Authorization")
-		if auth_header == "Basic bWl0ZXNoOk1pdGVzaC4xMjM=" {
-		} else {
+func handler(handle func(http.ResponseWriter, *http.Request)) http.Handler {
+	return http.HandlerFunc(handle)
+}
+
+func handlerWithMiddleware(handle func(http.ResponseWriter, *http.Request), middleware func(http.Handler) http.Handler) http.Handler {
+	return middleware(http.HandlerFunc(handle))
+}
+
+func middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		authHeader := req.Header.Get("Authorization")
+		if authHeader != "Basic bWl0ZXNoOk1pdGVzaC4xMjM=" {
 			fmt.Println("Authorization failed")
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Write([]byte("Unauthorized"))
 			return
 		}
+		next.ServeHTTP(w, req)
+	})
+}
 
+func handlePerson() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
 		method := req.Method
 		w.Header().Set("Content-Type", "text/plain")
 		fmt.Printf("Request method: %s with body: %s\n", method, req.Body)
@@ -283,15 +317,6 @@ func handlePerson() func(http.ResponseWriter, *http.Request) {
 
 func handleAnimal() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
-		auth_header := req.Header.Get("Authorization")
-		if auth_header == "Basic bWl0ZXNoOk1pdGVzaC4xMjM=" {
-		} else {
-			fmt.Println("Authorization failed")
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("Unauthorized"))
-			return
-		}
-
 		method := req.Method
 		w.Header().Set("Content-Type", "text/plain")
 		fmt.Printf("Request method: %s with body: %s\n", method, req.Body)
