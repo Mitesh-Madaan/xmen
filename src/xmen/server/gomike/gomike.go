@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	xModels "gomike/models"
+	xSession "gomike/session"
 	xDb "lib/dbchef"
 )
 
@@ -51,12 +52,14 @@ var connStr = "host=localhost user=postgres password=Postsql.123 dbname=postgres
 
 func run() {
 	var err error
+	dbSession := xSession.GetDBSession(connStr)
 	if dbSession == nil {
-		dbSession = xDb.GetSession(connStr)
+		fmt.Println("Failed to get DB session")
+		return
 	}
 	fmt.Printf("DB Session: %v\n", dbSession)
 
-	err = SeedTables(dbSession)
+	err = xSession.SeedTables(dbSession)
 	if err != nil {
 		fmt.Printf("Error seeding tables: %v\n", err)
 		return
@@ -77,10 +80,6 @@ func run() {
 		fmt.Println(err)
 	}
 
-}
-
-func handler(handle func(http.ResponseWriter, *http.Request)) http.Handler {
-	return http.HandlerFunc(handle)
 }
 
 func handlerWithMiddleware(handle func(http.ResponseWriter, *http.Request), middleware func(http.Handler) http.Handler) http.Handler {
