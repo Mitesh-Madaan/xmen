@@ -1,6 +1,6 @@
 module gomike
 
-go 1.21.0
+go 1.24
 
 require lib v0.0.0
 
