@@ -7,9 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/google/uuid"
-
 	xModels "gomike/models"
+	xSession "gomike/session"
 	xDb "lib/dbchef"
 )
 
@@ -26,7 +25,8 @@ func GetPerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request
 			return
 		}
 
-		person, err := xModels.GetPersonByID(dbSession, personID)
+		// person, err := xModels.GetPersonByID(dbSession, personID)
+		personPtr, err := xSession.ReadRecord[*xModels.Person](personID)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "record not found") {
 				errResponse := fmt.Sprintf("Person  with ID %s not found: %s", personID, err.Error())
@@ -114,8 +114,9 @@ func CreatePerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Requ
 			return
 		}
 
-		person := xModels.Person{ID: uuid.New().String()} // Create a new person instance
-		err = person.Create(dbSession, body)
+		// person := xModels.Person{ID: uuid.New().String()} // Create a new person instance
+		// err = person.Create(dbSession, body)
+		personPtr, err := xSession.CreateRecord[*xModels.Person](body)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to create person: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -124,7 +125,7 @@ func CreatePerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Requ
 		}
 
 		w.WriteHeader(http.StatusCreated)
-		res := fmt.Sprintf("Person with ID %s added", person.ID)
+		res := fmt.Sprintf("Person with ID %s added", (*personPtr).ID)
 		w.Write([]byte(res))
 	}
 }
