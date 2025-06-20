@@ -18,9 +18,9 @@ func GetAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request
 		w.Header().Set("Content-Type", "text/plain")
 		fmt.Printf("Request GET with body: %s\n", req.Body)
 
-		animalID, err := ParseIDFromURL(req.URL)
-		if err != nil {
-			errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
+		animalID := req.PathValue("animalID")
+		if animalID == "" {
+			errResponse := "Animal ID not provided in the URL"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
 			return
@@ -54,9 +54,9 @@ func GetAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request
 func UpdateAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request) {
 
 	return func(w http.ResponseWriter, req *http.Request) {
-		animalID, err := ParseIDFromURL(req.URL)
-		if err != nil {
-			errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
+		animalID := req.PathValue("animalID")
+		if animalID == "" {
+			errResponse := "Animal ID not provided in the URL"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
 			return
@@ -141,9 +141,9 @@ func CreateAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Requ
 
 func PatchAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
-		animalID, err := ParseIDFromURL(req.URL)
-		if err != nil {
-			errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
+		animalID := req.PathValue("animalID")
+		if animalID == "" {
+			errResponse := "Animal ID not provided in the URL"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
 			return
@@ -195,9 +195,9 @@ func PatchAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Reque
 
 func DeleteAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
-		animalID, err := ParseIDFromURL(req.URL)
-		if err != nil {
-			errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
+		animalID := req.PathValue("animalID")
+		if animalID == "" {
+			errResponse := "Animal ID not provided in the URL"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
 			return

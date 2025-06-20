@@ -18,9 +18,9 @@ func GetPerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request
 		w.Header().Set("Content-Type", "text/plain")
 		fmt.Printf("Request GET with body: %s\n", req.Body)
 
-		personID, err := ParseIDFromURL(req.URL)
-		if err != nil {
-			errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
+		personID := req.PathValue("personID")
+		if personID == "" {
+			errResponse := "Person ID not provided in the URL"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
 			return
@@ -53,9 +53,9 @@ func GetPerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request
 
 func UpdatePerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
-		personID, err := ParseIDFromURL(req.URL)
-		if err != nil {
-			errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
+		personID := req.PathValue("personID")
+		if personID == "" {
+			errResponse := "Person ID not provided in the URL"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
 			return
@@ -131,9 +131,9 @@ func CreatePerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Requ
 
 func PatchPerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
-		personID, err := ParseIDFromURL(req.URL)
-		if err != nil {
-			errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
+		personID := req.PathValue("personID")
+		if personID == "" {
+			errResponse := "Person ID not provided in the URL"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
 			return
@@ -176,9 +176,9 @@ func PatchPerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Reque
 
 func DeletePerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
-		personID, err := ParseIDFromURL(req.URL)
-		if err != nil {
-			errResponse := fmt.Sprintf("Failed to parse ID from URL: %s", err.Error())
+		personID := req.PathValue("personID")
+		if personID == "" {
+			errResponse := "Person ID not provided in the URL"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
 			return

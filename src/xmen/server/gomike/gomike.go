@@ -61,17 +61,17 @@ func run() {
 
 	mux := http.NewServeMux()
 
-	mux.Handle("GET /person/", handlerWithMiddleware(xRouter.GetPerson(dbSession), middleware))
-	mux.Handle("PUT /person/", handlerWithMiddleware(xRouter.UpdatePerson(dbSession), middleware))
+	mux.Handle("GET /person/{personID}", handlerWithMiddleware(xRouter.GetPerson(dbSession), middleware))
+	mux.Handle("PUT /person/{personID}", handlerWithMiddleware(xRouter.UpdatePerson(dbSession), middleware))
 	mux.Handle("POST /person/", handlerWithMiddleware(xRouter.CreatePerson(dbSession), middleware))
-	mux.Handle("PATCH /person/", handlerWithMiddleware(xRouter.PatchPerson(dbSession), middleware))
-	mux.Handle("DELETE /person/", handlerWithMiddleware(xRouter.DeletePerson(dbSession), middleware))
+	mux.Handle("PATCH /person/{personID}", handlerWithMiddleware(xRouter.PatchPerson(dbSession), middleware))
+	mux.Handle("DELETE /person/{personID}", handlerWithMiddleware(xRouter.DeletePerson(dbSession), middleware))
 
-	mux.Handle("GET /animal/", handlerWithMiddleware(xRouter.GetAnimal(dbSession), middleware))
-	mux.Handle("PUT /animal/", handlerWithMiddleware(xRouter.UpdateAnimal(dbSession), middleware))
+	mux.Handle("GET /animal/{animalID}", handlerWithMiddleware(xRouter.GetAnimal(dbSession), middleware))
+	mux.Handle("PUT /animal/{animalID}", handlerWithMiddleware(xRouter.UpdateAnimal(dbSession), middleware))
 	mux.Handle("POST /animal/", handlerWithMiddleware(xRouter.CreateAnimal(dbSession), middleware))
-	mux.Handle("PATCH /animal/", handlerWithMiddleware(xRouter.PatchAnimal(dbSession), middleware))
-	mux.Handle("DELETE /animal/", handlerWithMiddleware(xRouter.DeleteAnimal(dbSession), middleware))
+	mux.Handle("PATCH /animal/{animalID}", handlerWithMiddleware(xRouter.PatchAnimal(dbSession), middleware))
+	mux.Handle("DELETE /animal/{animalID}", handlerWithMiddleware(xRouter.DeleteAnimal(dbSession), middleware))
 
 	fmt.Println("Starting server at port 8080")
 	if err := http.ListenAndServe("localhost:8080", mux); err != nil {
