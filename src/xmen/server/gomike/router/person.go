@@ -1,6 +1,7 @@
 package router
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -39,7 +40,14 @@ func GetPerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(person.ToString()))
+		objDetails, err := json.Marshal(person)
+		if err != nil {
+			errResponse := fmt.Sprintf("Failed to marshal person details: %s", err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(errResponse))
+			return
+		}
+		w.Write(objDetails)
 	}
 }
 

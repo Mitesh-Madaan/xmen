@@ -6,7 +6,6 @@ import (
 
 type Base interface {
 	ToString() string
-	ToStatus() map[string]interface{}
 	Clone() Base
 	Create(dbSession *xDb.DBSession, objDetails []byte) error
 	Update(dbSession *xDb.DBSession, objDetails []byte) error

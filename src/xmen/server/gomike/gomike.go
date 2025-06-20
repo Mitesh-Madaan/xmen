@@ -30,10 +30,10 @@ Code Review:
 - Parse object from request body directly DONE
 - Create model independent, not member of model class ; CRUD operations indenpendent of models
 - API field validation : Check field function (optional) ; Explore OpenAPI 3 schema ; Generate models from schema automatically
-- Just pass object in db methods, no need to pass model, Use generic
-- Multiline string in ToString method > use %v
-- To Status > no need to implement, just return object as json
-- Return resp of API as json marshall of object
+- Just pass object in db methods, no need to pass model DONE
+- Multiline string in ToString method > use %v DONE
+- To Status > no need to implement, just return object as json DONE
+- Return resp of API as json marshall of object DONE
 - Logging? log/Slog structured logging go package
 
 Next:
@@ -46,7 +46,7 @@ var connStr = "host=localhost user=postgres password=Postsql.123 dbname=postgres
 
 func run() {
 	var err error
-	dbSession := xSession.GetDBSession(connStr)
+	dbSession = xSession.GetDBSession(connStr)
 	if dbSession == nil {
 		fmt.Println("Failed to get DB session")
 		return

@@ -14,7 +14,5 @@ func GetDBSession(connStr string) *xDb.DBSession {
 }
 
 func InitDBSession(connStr string) *xDb.DBSession {
-
-	dbSession = xDb.GetSession(connStr)
-	return dbSession
+	return xDb.NewDBSession(connStr)
 }

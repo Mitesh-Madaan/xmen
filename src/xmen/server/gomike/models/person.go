@@ -52,7 +52,7 @@ func (p *Person) Create(dbSession *xDb.DBSession, objDetails []byte) error {
 
 	fmt.Println("Creating person with details:", p.ToString())
 	// Create the person
-	err = dbSession.CreateRecords(&Person{}, []interface{}{p})
+	err = dbSession.CreateRecord(p)
 	if err != nil {
 		return xError.NewDBError(err)
 	}
@@ -69,7 +69,7 @@ func (p *Person) Update(dbSession *xDb.DBSession, objDetails []byte) error {
 	}
 	fmt.Println("Updating person with details:", p.ToString())
 	// Update the person
-	err := dbSession.UpdateRecords(&Person{}, map[string]interface{}{"id": p.ID}, p.ToStatus())
+	err := dbSession.UpdateRecord(p)
 	if err != nil {
 		return xError.NewDBError(err)
 	}
@@ -77,7 +77,7 @@ func (p *Person) Update(dbSession *xDb.DBSession, objDetails []byte) error {
 }
 
 func (p *Person) Delete(dbSession *xDb.DBSession) error {
-	err := dbSession.DeleteRecords(&Person{}, map[string]interface{}{"id": p.ID})
+	err := dbSession.DeleteRecord(p)
 	if err != nil {
 		return xError.NewDBError(err)
 	}
@@ -91,35 +91,22 @@ func (p *Person) Save(dbSession *xDb.DBSession, updates map[string]interface{}) 
 
 func (p *Person) ToString() string {
 	// Convert the base to a string
-	data := ""
-	data += fmt.Sprintf("Name: %s ", p.Name)
-	data += fmt.Sprintf("ID: %s ", p.ID)
-	data += fmt.Sprintf("Kind: %s ", p.Kind)
-	data += fmt.Sprintf("Age: %d ", p.Age)
-	data += fmt.Sprintf("Description: %s ", p.Description)
-	data += fmt.Sprintf("Nationality: %s ", p.Nationality)
-	data += fmt.Sprintf("Cloned: %t ", p.Cloned)
-	data += fmt.Sprintf("Cloned From Ref: %s ", p.ClonedFromRef)
+	data := fmt.Sprintf(`
+		Name: %s
+		ID: %s
+		Kind: %s
+		Age: %d 
+		Description: %s
+		Nationality: %s
+		Cloned: %t 
+		Cloned From Ref: %s
+		`, p.Name, p.ID, p.Kind, p.Age, p.Description, p.Nationality, p.Cloned, p.ClonedFromRef)
 	return data
-}
-
-func (p *Person) ToStatus() map[string]interface{} {
-	// Convert the base to a status
-	return map[string]interface{}{
-		"id":              p.ID,
-		"kind":            p.Kind,
-		"name":            p.Name,
-		"age":             p.Age,
-		"description":     p.Description,
-		"Nationality":     p.Nationality,
-		"cloned":          p.Cloned,
-		"cloned_from_ref": p.ClonedFromRef,
-	}
 }
 
 func GetPersonByID(dbSession *xDb.DBSession, personID string) (*Person, error) {
 	person := &Person{}
-	err := dbSession.ReadRecords(&Person{}, map[string]interface{}{"id": personID}, person)
+	err := dbSession.ReadRecord(map[string]interface{}{"id": personID}, person)
 	if err != nil {
 		return nil, xError.NewDBError(err)
 	}

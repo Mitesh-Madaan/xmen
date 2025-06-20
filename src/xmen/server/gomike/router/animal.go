@@ -40,7 +40,14 @@ func GetAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(animal.ToString()))
+		objDetails, err := json.Marshal(animal)
+		if err != nil {
+			errResponse := fmt.Sprintf("Failed to marshal animal details: %s", err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(errResponse))
+			return
+		}
+		w.Write(objDetails)
 	}
 }
 

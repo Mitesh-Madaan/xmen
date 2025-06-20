@@ -43,23 +43,21 @@ func (s *DBSession) SeedTables(models []interface{}) error {
 }
 
 // CreateRecords inserts multiple records into the database
-func (s *DBSession) CreateRecords(model interface{}, records []interface{}) error {
-	for _, record := range records {
-		result := s.conn.Model(model).Create(record)
-		if result.Error != nil {
-			return result.Error
-		}
-		// Check if the record was created successfully
-		if result.RowsAffected == 0 {
-			return gorm.ErrRecordNotFound
-		}
+func (s *DBSession) CreateRecord(record interface{}) error {
+	result := s.conn.Model(record).Create(record)
+	if result.Error != nil {
+		return result.Error
+	}
+	// Check if the record was created successfully
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
 	}
 	return nil
 }
 
 // ReadRecords retrieves records from the database based on the provided conditions
-func (s *DBSession) ReadRecords(model interface{}, conditions map[string]interface{}, records interface{}) error {
-	result := s.conn.Model(model).Where(conditions).Find(records)
+func (s *DBSession) ReadRecord(conditions map[string]interface{}, record interface{}) error {
+	result := s.conn.Model(record).Find(record, conditions)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -71,8 +69,8 @@ func (s *DBSession) ReadRecords(model interface{}, conditions map[string]interfa
 }
 
 // UpdateRecords updates records in the database based on the provided conditions
-func (s *DBSession) UpdateRecords(model interface{}, conditions map[string]interface{}, updates map[string]interface{}) error {
-	result := s.conn.Model(model).Where(conditions).Updates(updates)
+func (s *DBSession) UpdateRecord(record interface{}) error {
+	result := s.conn.Model(record).Updates(record)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -84,8 +82,8 @@ func (s *DBSession) UpdateRecords(model interface{}, conditions map[string]inter
 }
 
 // DeleteRecords deletes records from the database based on the provided conditions
-func (s *DBSession) DeleteRecords(model interface{}, conditions map[string]interface{}) error {
-	result := s.conn.Model(model).Where(conditions).Delete(model)
+func (s *DBSession) DeleteRecord(record interface{}) error {
+	result := s.conn.Model(record).Delete(record)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -94,18 +92,4 @@ func (s *DBSession) DeleteRecords(model interface{}, conditions map[string]inter
 		return gorm.ErrRecordNotFound
 	}
 	return nil
-}
-
-// Expose the session
-var Session *DBSession
-
-func InitSession(connStr string) {
-	Session = NewDBSession(connStr)
-}
-
-func GetSession(connStr string) *DBSession {
-	if Session == nil {
-		InitSession(connStr)
-	}
-	return Session
 }
