@@ -26,7 +26,7 @@ func GetPerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request
 		}
 
 		// person, err := xModels.GetPersonByID(dbSession, personID)
-		personPtr, err := xSession.ReadRecord[*xModels.Person](personID)
+		personPtr, err := xSession.ReadRecord[xModels.Person](personID)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "record not found") {
 				errResponse := fmt.Sprintf("Person  with ID %s not found: %s", personID, err.Error())
@@ -40,7 +40,7 @@ func GetPerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		objDetails, err := json.Marshal(person)
+		objDetails, err := json.Marshal(personPtr)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to marshal person details: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -69,7 +69,8 @@ func UpdatePerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Requ
 			return
 		}
 
-		person, err := xModels.GetPersonByID(dbSession, personID)
+		person := xModels.Person{ID: personID} // Create a new person instance with the ID from the URL
+		err = xSession.CreateRecord(&person, body)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "record not found") {
 				// Create the person

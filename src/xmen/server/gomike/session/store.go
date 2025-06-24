@@ -9,30 +9,24 @@ import (
 	xError "gomike/error"
 )
 
-type Storable interface {
-	ToString() string
-	ToStatus() map[string]interface{}
-	Init()
-}
+type Storable any
 
-func CreateRecord[T Storable](objDetails []byte) (obj *T, err error) {
+func CreateRecord[T Storable](obj T, objDetails []byte) error {
 	// Create a new record in the database
 	// This function will parse the objDetails and create a new record
 	// using the appropriate model based on the details provided.
 
-	obj = new(T)
-	(*obj).Init() // Initialize the object
 	fmt.Printf("Creating record with details: %s\n", string(objDetails))
-	err = json.Unmarshal(objDetails, obj)
+	err := json.Unmarshal(objDetails, obj)
 	if err != nil {
-		return nil, xError.NewParseError(err)
+		return xError.NewParseError(err)
 	}
 
-	err = dbSession.CreateRecords(&obj, []interface{}{obj})
+	err = dbSession.CreateRecord(&obj)
 	if err != nil {
-		return nil, xError.NewDBError(err)
+		return xError.NewDBError(err)
 	}
-	return obj, nil
+	return nil
 }
 
 func ReadRecord[T Storable](objID string) (obj *T, err error) {
@@ -40,7 +34,7 @@ func ReadRecord[T Storable](objID string) (obj *T, err error) {
 	// This function will retrieve the record based on the ID provided.
 
 	obj = new(T)
-	err = dbSession.ReadRecords(&obj, map[string]interface{}{"id": objID}, obj)
+	err = dbSession.ReadRecord(map[string]interface{}{"id": objID}, &obj)
 	if err != nil {
 		return nil, xError.NewDBError(err)
 	}

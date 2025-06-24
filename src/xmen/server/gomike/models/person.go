@@ -76,6 +76,10 @@ func (p *Person) Update(dbSession *xDb.DBSession, objDetails []byte) error {
 	return nil
 }
 
+func (p *Person) Init() {
+	// /lsdfnlkfhks?
+}
+
 func (p *Person) Delete(dbSession *xDb.DBSession) error {
 	err := dbSession.DeleteRecord(p)
 	if err != nil {
