@@ -28,7 +28,7 @@ Code Review:
 - Different handlers for different methods DONE
 - Fix ID parsing from URL {placeholders} DONE
 - Parse object from request body directly DONE
-- Create model independent, not member of model class ; CRUD operations indenpendent of models
+- Create model independent, not member of model class ; CRUD operations indenpendent of models DONE
 - API field validation : Check field function (optional) ; Explore OpenAPI 3 schema ; Generate models from schema automatically
 - Just pass object in db methods, no need to pass model DONE
 - Multiline string in ToString method > use %v DONE
