@@ -10,12 +10,13 @@ import (
 	xModels "gomike/models"
 	xSession "gomike/session"
 	xDb "lib/dbchef"
+
+	"github.com/google/uuid"
 )
 
 func GetPerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		fmt.Printf("Request GET with body: %s\n", req.Body)
 
 		personID := req.PathValue("personID")
 		if personID == "" {
@@ -25,8 +26,7 @@ func GetPerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request
 			return
 		}
 
-		// person, err := xModels.GetPersonByID(dbSession, personID)
-		personPtr, err := xSession.ReadRecord[xModels.Person](personID)
+		personPtr, err := xSession.ReadRecord[xModels.Person](dbSession, personID)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "record not found") {
 				errResponse := fmt.Sprintf("Person  with ID %s not found: %s", personID, err.Error())
@@ -68,14 +68,31 @@ func UpdatePerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Requ
 			w.Write([]byte(errResponse))
 			return
 		}
+		if len(body) == 0 {
+			errResponse := "Request body is empty"
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(errResponse))
+			return
+		}
 
-		person := xModels.Person{ID: personID} // Create a new person instance with the ID from the URL
-		err = xSession.CreateRecord(&person, body)
+		personPtr, err := xSession.ReadRecord[xModels.Person](dbSession, personID)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "record not found") {
-				// Create the person
-				person := xModels.Person{ID: personID} // Create a new person instance with the ID from the URL
-				err = person.Create(dbSession, body)
+				// If the person is not found, create a new person with the provided ID
+				person := xModels.Person{
+					ID:            personID,
+					Kind:          "person",
+					Cloned:        false,
+					ClonedFromRef: "",
+				} // Create a new person instance with the ID from the URL
+				err = json.Unmarshal(body, &person)
+				if err != nil {
+					errResponse := fmt.Sprintf("Failed to unmarshal request body into person: %s", err.Error())
+					w.WriteHeader(http.StatusBadRequest)
+					w.Write([]byte(errResponse))
+					return
+				}
+				err = xSession.CreateRecord(dbSession, person)
 				if err != nil {
 					errResponse := fmt.Sprintf("Failed to create person: %s", err.Error())
 					w.WriteHeader(http.StatusInternalServerError)
@@ -87,13 +104,20 @@ func UpdatePerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Requ
 				return
 			}
 			errResponse := fmt.Sprintf("Error retrieving person with ID %s: %s", personID, err.Error())
-			w.WriteHeader(http.StatusNotFound)
+			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errResponse))
 			return
 		}
 
-		// Update the person
-		err = person.Update(dbSession, body)
+		err = json.Unmarshal(body, personPtr)
+		if err != nil {
+			errResponse := fmt.Sprintf("Failed to unmarshal request body into person: %s", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(errResponse))
+			return
+		}
+
+		err = xSession.UpdateRecord(dbSession, *personPtr)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to update person: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -115,9 +139,29 @@ func CreatePerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Requ
 			return
 		}
 
-		// person := xModels.Person{ID: uuid.New().String()} // Create a new person instance
-		// err = person.Create(dbSession, body)
-		personPtr, err := xSession.CreateRecord[*xModels.Person](body)
+		if len(body) == 0 {
+			errResponse := "Request body is empty"
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(errResponse))
+			return
+		}
+
+		person := xModels.Person{
+			ID:            uuid.New().String(),
+			Kind:          "person",
+			Cloned:        false,
+			ClonedFromRef: "",
+		} // Create a new person instance
+
+		err = json.Unmarshal(body, &person)
+		if err != nil {
+			errResponse := fmt.Sprintf("Failed to unmarshal request body into person: %s", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(errResponse))
+			return
+		}
+
+		err = xSession.CreateRecord(dbSession, person)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to create person: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -126,7 +170,7 @@ func CreatePerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Requ
 		}
 
 		w.WriteHeader(http.StatusCreated)
-		res := fmt.Sprintf("Person with ID %s added", (*personPtr).ID)
+		res := fmt.Sprintf("Person with ID %s added", person.ID)
 		w.Write([]byte(res))
 	}
 }
@@ -149,7 +193,7 @@ func PatchPerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Reque
 			return
 		}
 
-		person, err := xModels.GetPersonByID(dbSession, personID)
+		personPtr, err := xSession.ReadRecord[xModels.Person](dbSession, personID)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "record not found") {
 				errResponse := fmt.Sprintf("Patch method is only allowed on existing records. Person with ID %s not found", personID)
@@ -158,13 +202,20 @@ func PatchPerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Reque
 				return
 			}
 			errResponse := fmt.Sprintf("Error retrieving person with ID %s: %s", personID, err.Error())
-			w.WriteHeader(http.StatusNotFound)
+			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errResponse))
 			return
 		}
 
-		// Update the person
-		err = person.Update(dbSession, body)
+		err = json.Unmarshal(body, personPtr)
+		if err != nil {
+			errResponse := fmt.Sprintf("Failed to unmarshal request body into person: %s", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(errResponse))
+			return
+		}
+
+		err = xSession.UpdateRecord(dbSession, *personPtr)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to update person: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -186,15 +237,21 @@ func DeletePerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Requ
 			return
 		}
 
-		person, err := xModels.GetPersonByID(dbSession, personID)
+		personPtr, err := xSession.ReadRecord[xModels.Person](dbSession, personID)
 		if err != nil {
-			errResponse := fmt.Sprintf("Person not found: %s", err.Error())
-			w.WriteHeader(http.StatusNotFound)
+			if strings.Contains(strings.ToLower(err.Error()), "record not found") {
+				errResponse := fmt.Sprintf("Person with ID %s not found", personID)
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte(errResponse))
+				return
+			}
+			errResponse := fmt.Sprintf("Error retrieving person: %s", err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errResponse))
 			return
 		}
 
-		err = person.Delete(dbSession)
+		err = xSession.DeleteRecord(dbSession, *personPtr)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to delete person: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)

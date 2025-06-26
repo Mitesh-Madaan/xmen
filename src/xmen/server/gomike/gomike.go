@@ -42,7 +42,10 @@ Next:
 */
 
 var dbSession *xDb.DBSession
-var connStr = "host=localhost user=postgres password=Postsql.123 dbname=postgres port=5432 sslmode=disable TimeZone=Asia/Shanghai"
+
+const (
+	connStr = "host=localhost user=postgres password=Postsql.123 dbname=postgres port=5432 sslmode=disable TimeZone=Asia/Shanghai"
+)
 
 func run() {
 	var err error
@@ -74,7 +77,7 @@ func run() {
 	mux.Handle("DELETE /animal/{animalID}", handlerWithMiddleware(xRouter.DeleteAnimal(dbSession), middleware))
 
 	fmt.Println("Starting server at port 8080")
-	if err := http.ListenAndServe("localhost:8080", mux); err != nil {
+	if err = http.ListenAndServe("localhost:8080", mux); err != nil {
 		fmt.Println(err)
 	}
 
