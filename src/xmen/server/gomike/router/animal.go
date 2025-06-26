@@ -10,13 +10,13 @@ import (
 	"github.com/google/uuid"
 
 	xModels "gomike/models"
+	xSession "gomike/session"
 	xDb "lib/dbchef"
 )
 
 func GetAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		fmt.Printf("Request GET with body: %s\n", req.Body)
 
 		animalID := req.PathValue("animalID")
 		if animalID == "" {
@@ -26,10 +26,10 @@ func GetAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request
 			return
 		}
 
-		animal, err := xModels.GetAnimalByID(dbSession, animalID)
+		animalPtr, err := xSession.ReadRecord[xModels.Animal](dbSession, animalID)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "record not found") {
-				errResponse := fmt.Sprintf("Animal with ID %s not found: %s", animalID, err.Error())
+				errResponse := fmt.Sprintf("Animal with ID %s not found", animalID)
 				w.WriteHeader(http.StatusNotFound)
 				w.Write([]byte(errResponse))
 				return
@@ -40,7 +40,7 @@ func GetAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		objDetails, err := json.Marshal(animal)
+		objDetails, err := json.Marshal(animalPtr)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to marshal animal details: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -52,7 +52,6 @@ func GetAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request
 }
 
 func UpdateAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request) {
-
 	return func(w http.ResponseWriter, req *http.Request) {
 		animalID := req.PathValue("animalID")
 		if animalID == "" {
@@ -69,13 +68,31 @@ func UpdateAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Requ
 			w.Write([]byte(errResponse))
 			return
 		}
+		if len(body) == 0 {
+			errResponse := "Request body is empty"
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(errResponse))
+			return
+		}
 
-		animal, err := xModels.GetAnimalByID(dbSession, animalID)
+		animalPtr, err := xSession.ReadRecord[xModels.Animal](dbSession, animalID)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "record not found") {
 				// Create the animal
-				animal := xModels.Animal{ID: animalID} // Create a new animal instance with the ID from the URL
-				err = animal.Create(dbSession, body)
+				animal := xModels.Animal{
+					ID:            animalID,
+					Kind:          "animal",
+					Cloned:        false,
+					ClonedFromRef: "",
+				} // Create a new animal instance with the ID from the URL
+				err = json.Unmarshal(body, &animal)
+				if err != nil {
+					errResponse := fmt.Sprintf("Failed to unmarshal request body: %s", err.Error())
+					w.WriteHeader(http.StatusBadRequest)
+					w.Write([]byte(errResponse))
+					return
+				}
+				err = xSession.CreateRecord(dbSession, animal)
 				if err != nil {
 					errResponse := fmt.Sprintf("Failed to create animal: %s", err.Error())
 					w.WriteHeader(http.StatusInternalServerError)
@@ -92,8 +109,15 @@ func UpdateAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Requ
 			return
 		}
 
-		// Update the animal
-		err = animal.Update(dbSession, body)
+		err = json.Unmarshal(body, animalPtr)
+		if err != nil {
+			errResponse := fmt.Sprintf("Failed to unmarshal request body into animal: %s", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(errResponse))
+			return
+		}
+
+		err = xSession.UpdateRecord(dbSession, animalPtr)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to update animal: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -115,17 +139,29 @@ func CreateAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Requ
 			return
 		}
 
-		var objMap map[string]interface{}
-		err = json.Unmarshal(body, &objMap)
-		if err != nil {
-			errResponse := fmt.Sprintf("Failed to unmarshal request body: %s", err.Error())
+		if len(body) == 0 {
+			errResponse := "Request body is empty"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
 			return
 		}
 
-		animal := xModels.Animal{ID: uuid.New().String()} // Create a new animal instance
-		err = animal.Create(dbSession, body)
+		animal := xModels.Animal{
+			ID:            uuid.New().String(), // Generate a new UUID for the animal
+			Kind:          "animal",
+			Cloned:        false,
+			ClonedFromRef: "",
+		} // Create a new animal instance with a generated ID
+
+		err = json.Unmarshal(body, &animal)
+		if err != nil {
+			errResponse := fmt.Sprintf("Failed to unmarshal request body into animal: %s", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(errResponse))
+			return
+		}
+
+		err = xSession.CreateRecord(dbSession, animal)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to create animal: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -157,16 +193,14 @@ func PatchAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Reque
 			return
 		}
 
-		var objMap map[string]interface{}
-		err = json.Unmarshal(body, &objMap)
-		if err != nil {
-			errResponse := fmt.Sprintf("Failed to unmarshal request body: %s", err.Error())
+		if len(body) == 0 {
+			errResponse := "Request body is empty"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
 			return
 		}
 
-		animal, err := xModels.GetAnimalByID(dbSession, animalID)
+		animalPtr, err := xSession.ReadRecord[xModels.Animal](dbSession, animalID)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "record not found") {
 				errResponse := fmt.Sprintf("Patch method is only allowed on existing records. Animal with ID %s not found", animalID)
@@ -180,8 +214,16 @@ func PatchAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Reque
 			return
 		}
 
-		// Update the animal
-		err = animal.Update(dbSession, body)
+		// Unmarshal the request body into a map to allow partial updates
+		err = json.Unmarshal(body, &animalPtr)
+		if err != nil {
+			errResponse := fmt.Sprintf("Failed to unmarshal request body into animal: %s", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(errResponse))
+			return
+		}
+
+		err = xSession.UpdateRecord(dbSession, animalPtr)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to update animal: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -203,15 +245,22 @@ func DeleteAnimal(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Requ
 			return
 		}
 
-		animal, err := xModels.GetAnimalByID(dbSession, animalID)
+		animalPtr, err := xSession.ReadRecord[xModels.Animal](dbSession, animalID)
 		if err != nil {
-			errResponse := fmt.Sprintf("Animal not found: %s", err.Error())
-			w.WriteHeader(http.StatusNotFound)
+			if strings.Contains(strings.ToLower(err.Error()), "record not found") {
+				errResponse := fmt.Sprintf("Animal with ID %s not found", animalID)
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte(errResponse))
+				return
+			}
+
+			errResponse := fmt.Sprintf("Error retrieving animal: %s", err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errResponse))
 			return
 		}
 
-		err = animal.Delete(dbSession)
+		err = xSession.DeleteRecord(dbSession, animalPtr)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to delete animal: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)

@@ -29,7 +29,7 @@ func GetPerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Request
 		personPtr, err := xSession.ReadRecord[xModels.Person](dbSession, personID)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "record not found") {
-				errResponse := fmt.Sprintf("Person  with ID %s not found: %s", personID, err.Error())
+				errResponse := fmt.Sprintf("Person  with ID %s not found", personID)
 				w.WriteHeader(http.StatusNotFound)
 				w.Write([]byte(errResponse))
 				return
@@ -189,6 +189,13 @@ func PatchPerson(dbSession *xDb.DBSession) func(http.ResponseWriter, *http.Reque
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to read request body: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(errResponse))
+			return
+		}
+
+		if len(body) == 0 {
+			errResponse := "Request body is empty"
+			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
 			return
 		}
