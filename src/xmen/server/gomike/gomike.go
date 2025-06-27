@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
+	"os"
 
 	xRouter "gomike/router"
 	xSession "gomike/session"
@@ -34,7 +36,7 @@ Code Review:
 - Multiline string in ToString method > use %v DONE
 - To Status > no need to implement, just return object as json DONE
 - Return resp of API as json marshall of object DONE
-- Logging? log/Slog structured logging go package
+- Logging? log/Slog structured logging go package DONE
 
 Next:
 - UT: Check ways to unit test http calls
@@ -62,19 +64,20 @@ func run() {
 		return
 	}
 
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	mux := http.NewServeMux()
 
-	mux.Handle("GET /person/{personID}", handlerWithMiddleware(xRouter.GetPerson(dbSession), middleware))
-	mux.Handle("PUT /person/{personID}", handlerWithMiddleware(xRouter.UpdatePerson(dbSession), middleware))
-	mux.Handle("POST /person/", handlerWithMiddleware(xRouter.CreatePerson(dbSession), middleware))
-	mux.Handle("PATCH /person/{personID}", handlerWithMiddleware(xRouter.PatchPerson(dbSession), middleware))
-	mux.Handle("DELETE /person/{personID}", handlerWithMiddleware(xRouter.DeletePerson(dbSession), middleware))
+	mux.Handle("GET /person/{personID}", handleWithLogger(logger, handleWithMiddleware(authMiddleware, http.HandlerFunc(xRouter.GetPerson(dbSession, logger)), logger)))
+	mux.Handle("PUT /person/{personID}", handleWithLogger(logger, handleWithMiddleware(authMiddleware, http.HandlerFunc(xRouter.UpdatePerson(dbSession, logger)), logger)))
+	mux.Handle("POST /person/", handleWithLogger(logger, handleWithMiddleware(authMiddleware, http.HandlerFunc(xRouter.CreatePerson(dbSession, logger)), logger)))
+	mux.Handle("PATCH /person/{personID}", handleWithLogger(logger, handleWithMiddleware(authMiddleware, http.HandlerFunc(xRouter.PatchPerson(dbSession, logger)), logger)))
+	mux.Handle("DELETE /person/{personID}", handleWithLogger(logger, handleWithMiddleware(authMiddleware, http.HandlerFunc(xRouter.DeletePerson(dbSession, logger)), logger)))
 
-	mux.Handle("GET /animal/{animalID}", handlerWithMiddleware(xRouter.GetAnimal(dbSession), middleware))
-	mux.Handle("PUT /animal/{animalID}", handlerWithMiddleware(xRouter.UpdateAnimal(dbSession), middleware))
-	mux.Handle("POST /animal/", handlerWithMiddleware(xRouter.CreateAnimal(dbSession), middleware))
-	mux.Handle("PATCH /animal/{animalID}", handlerWithMiddleware(xRouter.PatchAnimal(dbSession), middleware))
-	mux.Handle("DELETE /animal/{animalID}", handlerWithMiddleware(xRouter.DeleteAnimal(dbSession), middleware))
+	mux.Handle("GET /animal/{animalID}", handleWithLogger(logger, handleWithMiddleware(authMiddleware, http.HandlerFunc(xRouter.GetAnimal(dbSession, logger)), logger)))
+	mux.Handle("PUT /animal/{animalID}", handleWithLogger(logger, handleWithMiddleware(authMiddleware, http.HandlerFunc(xRouter.UpdateAnimal(dbSession, logger)), logger)))
+	mux.Handle("POST /animal/", handleWithLogger(logger, handleWithMiddleware(authMiddleware, http.HandlerFunc(xRouter.CreateAnimal(dbSession, logger)), logger)))
+	mux.Handle("PATCH /animal/{animalID}", handleWithLogger(logger, handleWithMiddleware(authMiddleware, http.HandlerFunc(xRouter.PatchAnimal(dbSession, logger)), logger)))
+	mux.Handle("DELETE /animal/{animalID}", handleWithLogger(logger, handleWithMiddleware(authMiddleware, http.HandlerFunc(xRouter.DeleteAnimal(dbSession, logger)), logger)))
 
 	fmt.Println("Starting server at port 8080")
 	if err = http.ListenAndServe("localhost:8080", mux); err != nil {
@@ -83,19 +86,31 @@ func run() {
 
 }
 
-func handlerWithMiddleware(handle func(http.ResponseWriter, *http.Request), middleware func(http.Handler) http.Handler) http.Handler {
-	return middleware(http.HandlerFunc(handle))
+func handleWithLogger(log *slog.Logger, middlewareHandler http.Handler) http.Handler {
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, req *http.Request) {
+			log.Info("Handling request method", slog.String("method", req.Method), slog.String("Path", req.URL.Path))
+			middlewareHandler.ServeHTTP(w, req)
+		},
+	)
 }
 
-func middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		authHeader := req.Header.Get("Authorization")
-		if authHeader != "Basic bWl0ZXNoOk1pdGVzaC4xMjM=" {
-			fmt.Println("Authorization failed")
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("Unauthorized"))
-			return
-		}
-		next.ServeHTTP(w, req)
-	})
+func handleWithMiddleware(middleware func(http.Handler, *slog.Logger) http.Handler, next http.Handler, log *slog.Logger) http.Handler {
+	return middleware(next, log)
+}
+
+func authMiddleware(next http.Handler, log *slog.Logger) http.Handler {
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, req *http.Request) {
+			authHeader := req.Header.Get("Authorization")
+			if authHeader != "Basic bWl0ZXNoOk1pdGVzaC4xMjM=" {
+				log.Error("Unauthorized")
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte("Unauthorized"))
+				return
+			}
+			log.Info("Authorization successful")
+			next.ServeHTTP(w, req)
+		},
+	)
 }
