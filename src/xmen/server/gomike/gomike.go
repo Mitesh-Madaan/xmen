@@ -9,6 +9,8 @@ import (
 	xRouter "gomike/router"
 	xSession "gomike/session"
 	xDb "lib/dbchef"
+
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -89,7 +91,9 @@ func run() {
 func handleWithLogger(log *slog.Logger, middlewareHandler http.Handler) http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, req *http.Request) {
-			log.Info("Handling request method", slog.String("method", req.Method), slog.String("Path", req.URL.Path))
+			requestID := uuid.New().String()
+			req.Header.Set("X-Request-ID", requestID)
+			log.Info("Handling request method", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("method", req.Method), slog.String("Path", req.URL.Path))
 			middlewareHandler.ServeHTTP(w, req)
 		},
 	)
@@ -104,12 +108,12 @@ func authMiddleware(next http.Handler, log *slog.Logger) http.Handler {
 		func(w http.ResponseWriter, req *http.Request) {
 			authHeader := req.Header.Get("Authorization")
 			if authHeader != "Basic bWl0ZXNoOk1pdGVzaC4xMjM=" {
-				log.Error("Unauthorized")
+				log.Error("Unauthorized", slog.String("request-id", req.Header.Get("X-Request-ID")))
 				w.WriteHeader(http.StatusUnauthorized)
 				w.Write([]byte("Unauthorized"))
 				return
 			}
-			log.Info("Authorization successful")
+			log.Info("Authorization successful", slog.String("request-id", req.Header.Get("X-Request-ID")))
 			next.ServeHTTP(w, req)
 		},
 	)

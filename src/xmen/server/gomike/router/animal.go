@@ -24,10 +24,11 @@ func GetAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.ResponseWri
 			errResponse := "Animal ID not provided in the URL"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
+			log.Error("Animal ID not provided in the URL", slog.String("request-id", req.Header.Get("X-Request-ID")))
 			return
 		}
 
-		log.Info("Got animal ID from request", slog.String("animalID", animalID))
+		log.Info("Got animal ID from request", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("animalID", animalID))
 
 		animalPtr, err := xSession.ReadRecord[xModels.Animal](dbSession, animalID)
 		if err != nil {
@@ -35,13 +36,13 @@ func GetAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.ResponseWri
 				errResponse := fmt.Sprintf("Animal with ID %s not found", animalID)
 				w.WriteHeader(http.StatusNotFound)
 				w.Write([]byte(errResponse))
-				log.Error("Animal not found")
+				log.Error("Animal not found", slog.String("request-id", req.Header.Get("X-Request-ID")))
 				return
 			}
 			errResponse := fmt.Sprintf("Error retrieving animal: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errResponse))
-			log.Error("Error retrieving animal", slog.String("error", err.Error()))
+			log.Error("Error retrieving animal", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -50,11 +51,11 @@ func GetAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.ResponseWri
 			errResponse := fmt.Sprintf("Failed to marshal animal details: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errResponse))
-			log.Error("Failed to marshal animal details", slog.String("error", err.Error()))
+			log.Error("Failed to marshal animal details", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 			return
 		}
 		w.Write(objDetails)
-		log.Info("Animal details retrieved successfully")
+		log.Info("Animal details retrieved successfully", slog.String("request-id", req.Header.Get("X-Request-ID")))
 	}
 }
 
@@ -66,31 +67,32 @@ func UpdateAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.Response
 			errResponse := "Animal ID not provided in the URL"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
+			log.Error("Animal ID not provided in the URL", slog.String("request-id", req.Header.Get("X-Request-ID")))
 			return
 		}
 
-		log.Info("Got animal ID from request", slog.String("animalID", animalID))
+		log.Info("Got animal ID from request", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("animalID", animalID))
 
 		body, err := ioutil.ReadAll(req.Body)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to read request body: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errResponse))
-			log.Error("Failed to read request body", slog.String("error", err.Error()))
+			log.Error("Failed to read request body", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 			return
 		}
 		if len(body) == 0 {
 			errResponse := "Request body is empty"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
-			log.Error("Request body is empty")
+			log.Error("Request body is empty", slog.String("request-id", req.Header.Get("X-Request-ID")))
 			return
 		}
 
 		animalPtr, err := xSession.ReadRecord[xModels.Animal](dbSession, animalID)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "record not found") {
-				log.Info("Animal not found, creating a new one")
+				log.Info("Animal not found, creating a new one", slog.String("request-id", req.Header.Get("X-Request-ID")))
 				// Create the animal
 				animal := xModels.Animal{
 					ID:            animalID,
@@ -103,7 +105,7 @@ func UpdateAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.Response
 					errResponse := fmt.Sprintf("Failed to unmarshal request body: %s", err.Error())
 					w.WriteHeader(http.StatusBadRequest)
 					w.Write([]byte(errResponse))
-					log.Error("Failed to unmarshal request body", slog.String("error", err.Error()))
+					log.Error("Failed to unmarshal request body", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 					return
 				}
 				err = xSession.CreateRecord(dbSession, animal)
@@ -111,28 +113,28 @@ func UpdateAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.Response
 					errResponse := fmt.Sprintf("Failed to create animal: %s", err.Error())
 					w.WriteHeader(http.StatusInternalServerError)
 					w.Write([]byte(errResponse))
-					log.Error("Failed to create animal", slog.String("error", err.Error()))
+					log.Error("Failed to create animal", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 					return
 				}
 
 				w.WriteHeader(http.StatusNoContent)
-				log.Info("New Animal created successfully")
+				log.Info("New Animal created successfully", slog.String("request-id", req.Header.Get("X-Request-ID")))
 				return
 			}
 			errResponse := fmt.Sprintf("Error retrieving animal with ID %s: %s", animalID, err.Error())
 			w.WriteHeader(http.StatusNotFound)
 			w.Write([]byte(errResponse))
-			log.Error("Error retrieving animal", slog.String("error", err.Error()))
+			log.Error("Error retrieving animal", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 			return
 		}
 
-		log.Info("Updating existing animal")
+		log.Info("Updating existing animal", slog.String("request-id", req.Header.Get("X-Request-ID")))
 		err = json.Unmarshal(body, animalPtr)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to unmarshal request body into animal: %s", err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
-			log.Error("Failed to unmarshal request body into animal", slog.String("error", err.Error()))
+			log.Error("Failed to unmarshal request body into animal", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 			return
 		}
 
@@ -141,12 +143,12 @@ func UpdateAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.Response
 			errResponse := fmt.Sprintf("Failed to update animal: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errResponse))
-			log.Error("Failed to update animal", slog.String("error", err.Error()))
+			log.Error("Failed to update animal", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 			return
 		}
 
 		w.WriteHeader(http.StatusNoContent)
-		log.Info("Animal updated successfully")
+		log.Info("Animal updated successfully", slog.String("request-id", req.Header.Get("X-Request-ID")))
 	}
 }
 
@@ -158,7 +160,7 @@ func CreateAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.Response
 			errResponse := fmt.Sprintf("Failed to read request body: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errResponse))
-			log.Error("Failed to read request body", slog.String("error", err.Error()))
+			log.Error("Failed to read request body", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 			return
 		}
 
@@ -166,7 +168,7 @@ func CreateAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.Response
 			errResponse := "Request body is empty"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
-			log.Error("Request body is empty")
+			log.Error("Request body is empty", slog.String("request-id", req.Header.Get("X-Request-ID")))
 			return
 		}
 
@@ -176,14 +178,14 @@ func CreateAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.Response
 			Cloned:        false,
 			ClonedFromRef: "",
 		} // Create a new animal instance with a generated ID
-		log.Info("Creating new animal with ID", slog.String("animalID", animal.ID))
+		log.Info("Creating new animal with ID", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("animalID", animal.ID))
 
 		err = json.Unmarshal(body, &animal)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to unmarshal request body into animal: %s", err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
-			log.Error("Failed to unmarshal request body into animal", slog.String("error", err.Error()))
+			log.Error("Failed to unmarshal request body into animal", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 			return
 		}
 
@@ -192,14 +194,14 @@ func CreateAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.Response
 			errResponse := fmt.Sprintf("Failed to create animal: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errResponse))
-			log.Error("Failed to create animal", slog.String("error", err.Error()))
+			log.Error("Failed to create animal", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 			return
 		}
 
 		w.WriteHeader(http.StatusCreated)
 		res := fmt.Sprintf("Animal with ID %s added", animal.ID)
 		w.Write([]byte(res))
-		log.Info("New Animal created successfully")
+		log.Info("New Animal created successfully", slog.String("request-id", req.Header.Get("X-Request-ID")))
 	}
 }
 
@@ -211,17 +213,18 @@ func PatchAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.ResponseW
 			errResponse := "Animal ID not provided in the URL"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
+			log.Error("Animal ID not provided in the URL", slog.String("request-id", req.Header.Get("X-Request-ID")))
 			return
 		}
 
-		log.Info("Got animal ID from request", slog.String("animalID", animalID))
+		log.Info("Got animal ID from request", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("animalID", animalID))
 
 		body, err := ioutil.ReadAll(req.Body)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to read request body: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errResponse))
-			log.Error("Failed to read request body", slog.String("error", err.Error()))
+			log.Error("Failed to read request body", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 			return
 		}
 
@@ -229,7 +232,7 @@ func PatchAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.ResponseW
 			errResponse := "Request body is empty"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
-			log.Error("Request body is empty")
+			log.Error("Request body is empty", slog.String("request-id", req.Header.Get("X-Request-ID")))
 			return
 		}
 
@@ -239,13 +242,13 @@ func PatchAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.ResponseW
 				errResponse := fmt.Sprintf("Patch method is only allowed on existing records. Animal with ID %s not found", animalID)
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte(errResponse))
-				log.Warn("Patch method called on non-existing animal, only allowed on existing records")
+				log.Warn("Patch method called on non-existing animal, only allowed on existing records", slog.String("request-id", req.Header.Get("X-Request-ID")))
 				return
 			}
 			errResponse := fmt.Sprintf("Error retrieving animal with ID %s: %s", animalID, err.Error())
 			w.WriteHeader(http.StatusNotFound)
 			w.Write([]byte(errResponse))
-			log.Error("Error retrieving animal", slog.String("error", err.Error()))
+			log.Error("Error retrieving animal", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 			return
 		}
 
@@ -255,22 +258,22 @@ func PatchAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.ResponseW
 			errResponse := fmt.Sprintf("Failed to unmarshal request body into animal: %s", err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
-			log.Error("Failed to unmarshal request body into animal", slog.String("error", err.Error()))
+			log.Error("Failed to unmarshal request body into animal", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 			return
 		}
 
-		log.Info("Patching existing animal")
+		log.Info("Patching existing animal", slog.String("request-id", req.Header.Get("X-Request-ID")))
 		err = xSession.UpdateRecord(dbSession, animalPtr)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to update animal: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errResponse))
-			log.Error("Failed to update animal", slog.String("error", err.Error()))
+			log.Error("Failed to update animal", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 			return
 		}
 
 		w.WriteHeader(http.StatusNoContent)
-		log.Info("Animal patched successfully")
+		log.Info("Animal patched successfully", slog.String("request-id", req.Header.Get("X-Request-ID")))
 	}
 }
 
@@ -282,10 +285,11 @@ func DeleteAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.Response
 			errResponse := "Animal ID not provided in the URL"
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(errResponse))
+			log.Error("Animal ID not provided in the URL", slog.String("request-id", req.Header.Get("X-Request-ID")))
 			return
 		}
 
-		log.Info("Got animal ID from request", slog.String("animalID", animalID))
+		log.Info("Got animal ID from request", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("animalID", animalID))
 
 		animalPtr, err := xSession.ReadRecord[xModels.Animal](dbSession, animalID)
 		if err != nil {
@@ -293,30 +297,30 @@ func DeleteAnimal(dbSession *xDb.DBSession, log *slog.Logger) func(http.Response
 				errResponse := fmt.Sprintf("Animal with ID %s not found", animalID)
 				w.WriteHeader(http.StatusNotFound)
 				w.Write([]byte(errResponse))
-				log.Error("Animal not found")
+				log.Error("Animal not found", slog.String("request-id", req.Header.Get("X-Request-ID")))
 				return
 			}
 
 			errResponse := fmt.Sprintf("Error retrieving animal: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errResponse))
-			log.Error("Error retrieving animal", slog.String("error", err.Error()))
+			log.Error("Error retrieving animal", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 			return
 		}
 
-		log.Info("Deleting animal")
+		log.Info("Deleting animal", slog.String("request-id", req.Header.Get("X-Request-ID")))
 		err = xSession.DeleteRecord(dbSession, animalPtr)
 		if err != nil {
 			errResponse := fmt.Sprintf("Failed to delete animal: %s", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errResponse))
-			log.Error("Failed to delete animal", slog.String("error", err.Error()))
+			log.Error("Failed to delete animal", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("error", err.Error()))
 			return
 		}
 
 		w.WriteHeader(http.StatusOK)
 		res := fmt.Sprintf("Animal with ID %s deleted", animalID)
 		w.Write([]byte(res))
-		log.Info("Animal deleted successfully")
+		log.Info("Animal deleted successfully", slog.String("request-id", req.Header.Get("X-Request-ID")))
 	}
 }
