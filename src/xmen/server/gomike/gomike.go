@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	xRouter "gomike/router"
 	xSession "gomike/session"
@@ -33,12 +35,13 @@ Code Review:
 - Fix ID parsing from URL {placeholders} DONE
 - Parse object from request body directly DONE
 - Create model independent, not member of model class ; CRUD operations indenpendent of models DONE
-- API field validation : Check field function (optional) ; Explore OpenAPI 3 schema ; Generate models from schema automatically
+- API field validation : Check field function (optional) ; Explore OpenAPI 3 schema ; Generate models from schema automatically DEFERRED
 - Just pass object in db methods, no need to pass model DONE
 - Multiline string in ToString method > use %v DONE
 - To Status > no need to implement, just return object as json DONE
 - Return resp of API as json marshall of object DONE
 - Logging? log/Slog structured logging go package DONE
+- Context? > Use context for request ID, timeout, cancellation, error handling , and logging
 
 Next:
 - UT: Check ways to unit test http calls
@@ -92,9 +95,36 @@ func handleWithLogger(log *slog.Logger, middlewareHandler http.Handler) http.Han
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, req *http.Request) {
 			requestID := uuid.New().String()
-			req.Header.Set("X-Request-ID", requestID)
-			log.Info("Handling request method", slog.String("request-id", req.Header.Get("X-Request-ID")), slog.String("method", req.Method), slog.String("Path", req.URL.Path))
-			middlewareHandler.ServeHTTP(w, req)
+			ctx, _ := context.WithTimeout(req.Context(), 2*time.Second)
+			ctx = context.WithValue(ctx, xRouter.RequestIDKey("requestID"), requestID)
+			req = req.WithContext(ctx)
+			log.Info("Handling request method", slog.String("request-id", req.Context().Value(xRouter.RequestIDKey("requestID")).(string)), slog.String("method", req.Method), slog.String("Path", req.URL.Path))
+			responseChan := make(chan struct{})
+			go func() {
+				defer func() {
+					close(responseChan)
+				}()
+				middlewareHandler.ServeHTTP(w, req)
+				responseChan <- struct{}{}
+			}()
+
+			select {
+			case <-req.Context().Done():
+				if req.Context().Err() == context.DeadlineExceeded {
+					w.WriteHeader(http.StatusRequestTimeout)
+					w.Write([]byte("Request timed out"))
+					log.Error("Request timed out due to deadline exceeded", slog.String("request-id", req.Context().Value(xRouter.RequestIDKey("requestID")).(string)))
+					return
+				} else {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("Request failed due to context cancellation"))
+					log.Error("Request failed due to context cancellation", slog.String("request-id", req.Context().Value(xRouter.RequestIDKey("requestID")).(string)))
+					return
+				}
+			case <-responseChan:
+				log.Info("Request completed successfully", slog.String("request-id", req.Context().Value(xRouter.RequestIDKey("requestID")).(string)))
+				return
+			}
 		},
 	)
 }
@@ -108,12 +138,12 @@ func authMiddleware(next http.Handler, log *slog.Logger) http.Handler {
 		func(w http.ResponseWriter, req *http.Request) {
 			authHeader := req.Header.Get("Authorization")
 			if authHeader != "Basic bWl0ZXNoOk1pdGVzaC4xMjM=" {
-				log.Error("Unauthorized", slog.String("request-id", req.Header.Get("X-Request-ID")))
+				log.Error("Unauthorized", slog.String("request-id", req.Context().Value(xRouter.RequestIDKey("requestID")).(string)))
 				w.WriteHeader(http.StatusUnauthorized)
 				w.Write([]byte("Unauthorized"))
 				return
 			}
-			log.Info("Authorization successful", slog.String("request-id", req.Header.Get("X-Request-ID")))
+			log.Info("Authorization successful", slog.String("request-id", req.Context().Value(xRouter.RequestIDKey("requestID")).(string)))
 			next.ServeHTTP(w, req)
 		},
 	)

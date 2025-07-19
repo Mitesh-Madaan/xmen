@@ -5,6 +5,8 @@ import (
 	"net/url"
 )
 
+type RequestIDKey string
+
 // parse ID from URL query parameters
 func ParseIDFromURL(urlPath *url.URL) (string, error) {
 	listIDs := urlPath.Query()["id"]
