@@ -1,3 +1,6 @@
 
 # Ignore all file in this directory
 vendor/
+
+# Ignore go binaries
+gomike

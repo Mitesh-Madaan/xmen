@@ -1,87 +1,95 @@
 package dbchef
 
 import (
-	"errors"
+	"log"
+	"sync"
 
-	"google.golang.org/protobuf/proto"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-var db *Directory
+var (
+	db   *gorm.DB
+	once sync.Once
+)
 
-type Directory struct {
-	Records []Record
+type DBSession struct {
+	conn *gorm.DB
 }
 
-type Entity[Proto proto.Message] interface {
-	ToProto() Proto
-	FromProto(p Proto) error
+// NewDBSession initializes a singleton DB connection
+func NewDBSession(connStr string) *DBSession {
+	once.Do(func() {
+		var err error
+		db, err = gorm.Open(postgres.Open(connStr), &gorm.Config{})
+		if err != nil {
+			log.Fatalf("Failed to connect to DB: %v", err)
+		}
+	})
+	return &DBSession{conn: db}
 }
 
-type Record struct {
-	Id   string
-	Kind string
-	Msg  proto.Message
-}
-
-func GetDirectory() *Directory {
-	// Get the directory
-	if db != nil {
-		return db
-	}
-	db = createDirectory()
-	return db
-}
-
-func createDirectory() *Directory {
-	// Create a new directory
-	directory := Directory{}
-	directory.Records = make([]Record, 0)
-	return &directory
-}
-
-func NewRecord(id, kind string, msg proto.Message) Record {
-	// Create a new record
-	return Record{
-		Id:   id,
-		Kind: kind,
-		Msg:  msg,
-	}
-}
-
-// Get retrieves a proto.Message by its ID and kind from the Directory.
-func (d *Directory) Get(id, kind string) (proto.Message, error) {
-	for _, record := range d.Records {
-		if record.Id == id && record.Kind == kind {
-			return record.Msg, nil
+// SeedTables seeds the database with initial data for the provided models
+func (s *DBSession) SeedTables(models []interface{}) error {
+	for _, model := range models {
+		if !s.conn.Migrator().HasTable(model) {
+			err := s.conn.Migrator().CreateTable(model)
+			if err != nil {
+				return err
+			}
 		}
 	}
-	return nil, errors.New("record not found")
-}
-
-// Add adds a new proto.Message to the Directory.
-func (d *Directory) Add(id, kind string, msg proto.Message) error {
-	d.Records = append(d.Records, NewRecord(id, kind, msg))
 	return nil
 }
 
-// Update updates an existing proto.Message in the Directory.
-func (d *Directory) Update(id, kind string, msg proto.Message) error {
-	for i, record := range d.Records {
-		if record.Id == id && record.Kind == kind {
-			d.Records[i].Msg = msg
-			return nil
-		}
+// CreateRecords inserts multiple records into the database
+func (s *DBSession) CreateRecord(record interface{}) error {
+	result := s.conn.Model(record).Create(record)
+	if result.Error != nil {
+		return result.Error
 	}
-	return errors.New("record not found")
+	// Check if the record was created successfully
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
-// Delete removes a proto.Message from the Directory by its ID and kind.
-func (d *Directory) Delete(id, kind string) error {
-	for i, record := range d.Records {
-		if record.Id == id && record.Kind == kind {
-			d.Records = append(d.Records[:i], d.Records[i+1:]...)
-			return nil
-		}
+// ReadRecords retrieves records from the database based on the provided conditions
+func (s *DBSession) ReadRecord(conditions map[string]interface{}, record interface{}) error {
+	result := s.conn.Model(record).Find(record, conditions)
+	if result.Error != nil {
+		return result.Error
 	}
-	return errors.New("record not found")
+	// Check if any records were found
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// UpdateRecords updates records in the database based on the provided conditions
+func (s *DBSession) UpdateRecord(record interface{}) error {
+	result := s.conn.Model(record).Updates(record)
+	if result.Error != nil {
+		return result.Error
+	}
+	// Check if any records were updated
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// DeleteRecords deletes records from the database based on the provided conditions
+func (s *DBSession) DeleteRecord(record interface{}) error {
+	result := s.conn.Model(record).Delete(record)
+	if result.Error != nil {
+		return result.Error
+	}
+	// Check if any records were deleted
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
